@@ -38357,9 +38357,9 @@ plcid_FZBoss:		equ (ptr_PLC_FZBoss-ArtLoadCues)/2	; $1F
 		dcb.b	$300,$FF
 Nem_SegaLogo:	incbin	"artnem\Sega Logo.bin" ; large Sega logo
 		even
-Eni_SegaLogo:	incbin	"tilemaps\Sega Logo.bin" ; large Sega logo (mappings)
+Eni_SegaLogo:	incbin	"misc\Sega Logo Maps (Enigma).bin" ; large Sega logo (mappings)
 		even
-Eni_Title:	incbin	"tilemaps\Title Screen.bin" ; title screen foreground (mappings)
+Eni_Title:	incbin	"misc\Title Screen Maps (Enigma).bin" ; title screen foreground (mappings)
 		even
 Nem_TitleFg:	incbin	"artnem\Title Screen Foreground.bin"
 		even
@@ -38367,7 +38367,7 @@ Nem_TitleSonic:	incbin	"artnem\Title Screen Sonic.bin"
 		even
 Nem_TitleTM:	incbin	"artnem\Title Screen TM.bin"
 		even
-Eni_JapNames:	incbin	"tilemaps\Hidden Japanese Credits.bin" ; Japanese credits (mappings)
+Eni_JapNames:	incbin	"misc\Hidden Japanese Credits Maps (Enigma).bin" ; Japanese credits (mappings)
 		even
 Nem_JapNames:	incbin	"artnem\Hidden Japanese Credits.bin"
 		even
@@ -38393,11 +38393,11 @@ Nem_Stars:	incbin	"artnem\Invincibility Stars.bin"
 Map_SSWalls:	include	"_maps\SS Walls.asm"
 Nem_SSWalls:	incbin	"artnem\Special Walls.bin" ; special stage walls
 		even
-Eni_SSBg1:	incbin	"tilemaps\SS Background 1.bin" ; special stage background (mappings)
+Eni_SSBg1:	incbin	"misc\SS Background 1 Maps (Enigma).bin" ; special stage background (mappings)
 		even
 Nem_SSBgFish:	incbin	"artnem\Special Birds & Fish.bin" ; special stage birds and fish background
 		even
-Eni_SSBg2:	incbin	"tilemaps\SS Background 2.bin" ; special stage background (mappings)
+Eni_SSBg2:	incbin	"misc\SS Background 2 Maps (Enigma).bin" ; special stage background (mappings)
 		even
 Nem_SSBgCloud:	incbin	"artnem\Special Clouds.bin" ; special stage clouds background
 		even
