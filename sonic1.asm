@@ -1125,7 +1125,64 @@ PlaySound_Unused:
 		rts
 
 
-		include	"_inc\PauseGame.asm"
+; ---------------------------------------------------------------------------
+; Subroutine to	pause the game
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+PauseGame:
+		nop
+		tst.b	(v_lives).w	; do you have any lives	left?
+		beq.s	Unpause		; if not, branch
+		tst.w	(f_pause).w	; is game already paused?
+		bne.s	Pause_StopGame	; if yes, branch
+		btst	#bitStart,(v_jpadpress1).w ; is Start button pressed?
+		beq.s	Pause_DoNothing	; if not, branch
+
+Pause_StopGame:
+		move.w	#1,(f_pause).w	; freeze time
+		move.b	#1,(v_snddriver_ram+f_pausemusic).w ; pause music
+
+Pause_Loop:
+		move.b	#$10,(v_vbla_routine).w
+		bsr.w	WaitForVBla
+		tst.b	(f_slomocheat).w ; is slow-motion cheat on?
+		beq.s	Pause_ChkStart	; if not, branch
+		btst	#bitA,(v_jpadpress1).w ; is button A pressed?
+		beq.s	Pause_ChkBC	; if not, branch
+		move.b	#id_Title,(v_gamemode).w ; set game mode to 4 (title screen)
+		nop
+		bra.s	Pause_EndMusic
+; ===========================================================================
+
+Pause_ChkBC:
+		btst	#bitB,(v_jpadhold1).w ; is button B pressed?
+		bne.s	Pause_SlowMo	; if yes, branch
+		btst	#bitC,(v_jpadpress1).w ; is button C pressed?
+		bne.s	Pause_SlowMo	; if yes, branch
+
+Pause_ChkStart:
+		btst	#bitStart,(v_jpadpress1).w ; is Start button pressed?
+		beq.s	Pause_Loop	; if not, branch
+
+Pause_EndMusic:
+		move.b	#$80,(v_snddriver_ram+f_pausemusic).w	; unpause the music
+
+Unpause:
+		move.w	#0,(f_pause).w	; unpause the game
+
+Pause_DoNothing:
+		rts
+; ===========================================================================
+
+Pause_SlowMo:
+		move.w	#1,(f_pause).w
+		move.b	#$80,(v_snddriver_ram+f_pausemusic).w	; Unpause the music
+		rts
+; End of function PauseGame
+
 
 ; ---------------------------------------------------------------------------
 ; Subroutine to	copy a tile map from RAM to VRAM namespace
@@ -1156,7 +1213,229 @@ TilemapToVRAM:
 		rts	
 ; End of function TilemapToVRAM
 
-		include	"_inc\Nemesis Decompression.asm"
+
+; ---------------------------------------------------------------------------
+; Nemesis decompression	subroutine, decompresses art directly to VRAM
+; Inputs:
+; a0 = art address
+
+; For format explanation see http://info.sonicretro.org/Nemesis_compression
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B R O U T I N E |||||||||||||||||||||||||||||||||||||||
+
+; Nemesis decompression to VRAM
+NemDec:
+		movem.l	d0-a1/a3-a5,-(sp)
+		lea	(NemPCD_WriteRowToVDP).l,a3	; write all data to the same location
+		lea	(vdp_data_port).l,a4	; specifically, to the VDP data port
+		bra.s	NemDecMain
+
+; ||||||||||||||| S U B R O U T I N E |||||||||||||||||||||||||||||||||||||||
+
+; Nemesis decompression subroutine, decompresses art to RAM
+; Inputs:
+; a0 = art address
+; a4 = destination RAM address
+NemDecToRAM:
+		movem.l	d0-a1/a3-a5,-(sp)
+		lea	(NemPCD_WriteRowToRAM).l,a3 ; advance to the next location after each write
+
+NemDecMain:
+		lea	(v_ngfx_buffer).w,a1
+		move.w	(a0)+,d2	; get number of patterns
+		lsl.w	#1,d2
+		bcc.s	loc_146A	; branch if the sign bit isn't set
+		adda.w	#NemPCD_WriteRowToVDP_XOR-NemPCD_WriteRowToVDP,a3	; otherwise the file uses XOR mode
+
+loc_146A:
+		lsl.w	#2,d2	; get number of 8-pixel rows in the uncompressed data
+		movea.w	d2,a5	; and store it in a5 because there aren't any spare data registers
+		moveq	#8,d3	; 8 pixels in a pattern row
+		moveq	#0,d2
+		moveq	#0,d4
+		bsr.w	NemDec_BuildCodeTable
+		move.b	(a0)+,d5	; get first byte of compressed data
+		asl.w	#8,d5	; shift up by a byte
+		move.b	(a0)+,d5	; get second byte of compressed data
+		move.w	#$10,d6	; set initial shift value
+		bsr.s	NemDec_ProcessCompressedData
+		movem.l	(sp)+,d0-a1/a3-a5
+		rts
+; End of function NemDec
+
+; ---------------------------------------------------------------------------
+; Part of the Nemesis decompressor, processes the actual compressed data
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+NemDec_ProcessCompressedData:
+		move.w	d6,d7
+		subq.w	#8,d7	; get shift value
+		move.w	d5,d1
+		lsr.w	d7,d1	; shift so that high bit of the code is in bit position 7
+		cmpi.b	#%11111100,d1	; are the high 6 bits set?
+		bcc.s	NemPCD_InlineData	; if they are, it signifies inline data
+		andi.w	#$FF,d1
+		add.w	d1,d1
+		move.b	(a1,d1.w),d0	; get the length of the code in bits
+		ext.w	d0
+		sub.w	d0,d6	; subtract from shift value so that the next code is read next time around
+		cmpi.w	#9,d6	; does a new byte need to be read?
+		bcc.s	loc_14B2	; if not, branch
+		addq.w	#8,d6
+		asl.w	#8,d5
+		move.b	(a0)+,d5	; read next byte
+
+loc_14B2:
+		move.b	1(a1,d1.w),d1
+		move.w	d1,d0
+		andi.w	#$F,d1	; get palette index for pixel
+		andi.w	#$F0,d0
+
+NemPCD_ProcessCompressedData:
+		lsr.w	#4,d0	; get repeat count
+
+NemPCD_WritePixel:
+		lsl.l	#4,d4	; shift up by a nybble
+		or.b	d1,d4	; write pixel
+		subq.w	#1,d3	; has an entire 8-pixel row been written?
+		bne.s	NemPCD_WritePixel_Loop	; if not, loop
+		jmp	(a3)	; otherwise, write the row to its destination, by doing a dynamic jump to NemPCD_WriteRowToVDP, NemDec_WriteAndAdvance, NemPCD_WriteRowToVDP_XOR, or NemDec_WriteAndAdvance_XOR
+; End of function NemDec_ProcessCompressedData
+
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+NemPCD_NewRow:
+		moveq	#0,d4	; reset row
+		moveq	#8,d3	; reset nybble counter
+
+NemPCD_WritePixel_Loop:
+		dbf	d0,NemPCD_WritePixel
+		bra.s	NemDec_ProcessCompressedData
+; ===========================================================================
+
+NemPCD_InlineData:
+		subq.w	#6,d6	; 6 bits needed to signal inline data
+		cmpi.w	#9,d6
+		bcc.s	loc_14E4
+		addq.w	#8,d6
+		asl.w	#8,d5
+		move.b	(a0)+,d5
+
+loc_14E4:
+		subq.w	#7,d6	; and 7 bits needed for the inline data itself
+		move.w	d5,d1
+		lsr.w	d6,d1	; shift so that low bit of the code is in bit position 0
+		move.w	d1,d0
+		andi.w	#$F,d1	; get palette index for pixel
+		andi.w	#$70,d0	; high nybble is repeat count for pixel
+		cmpi.w	#9,d6
+		bcc.s	NemPCD_ProcessCompressedData
+		addq.w	#8,d6
+		asl.w	#8,d5
+		move.b	(a0)+,d5
+		bra.s	NemPCD_ProcessCompressedData
+; End of function NemPCD_NewRow
+
+; ===========================================================================
+
+NemPCD_WriteRowToVDP:
+		move.l	d4,(a4)	; write 8-pixel row
+		subq.w	#1,a5
+		move.w	a5,d4	; have all the 8-pixel rows been written?
+		bne.s	NemPCD_NewRow	; if not, branch
+		rts		; otherwise the decompression is finished
+; ===========================================================================
+NemPCD_WriteRowToVDP_XOR:
+		eor.l	d4,d2	; XOR the previous row by the current row
+		move.l	d2,(a4)	; and write the result
+		subq.w	#1,a5
+		move.w	a5,d4
+		bne.s	NemPCD_NewRow
+		rts
+; ===========================================================================
+
+NemPCD_WriteRowToRAM:
+		move.l	d4,(a4)+
+		subq.w	#1,a5
+		move.w	a5,d4
+		bne.s	NemPCD_NewRow
+		rts
+; ===========================================================================
+NemPCD_WriteRowToRAM_XOR:
+		eor.l	d4,d2
+		move.l	d2,(a4)+
+		subq.w	#1,a5
+		move.w	a5,d4
+		bne.s	NemPCD_NewRow
+		rts
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+; ---------------------------------------------------------------------------
+; Part of the Nemesis decompressor, builds the code table (in RAM)
+; ---------------------------------------------------------------------------
+
+
+NemDec_BuildCodeTable:
+		move.b	(a0)+,d0	; read first byte
+
+NemBCT_ChkEnd:
+		cmpi.b	#$FF,d0	; has the end of the code table description been reached?
+		bne.s	NemBCT_NewPALIndex	; if not, branch
+		rts	; otherwise, this subroutine's work is done
+; ===========================================================================
+
+NemBCT_NewPALIndex:
+		move.w	d0,d7
+
+NemBCT_Loop:
+		move.b	(a0)+,d0	; read next byte
+		cmpi.b	#$80,d0	; sign bit being set signifies a new palette index
+		bcc.s	NemBCT_ChkEnd	; a bmi could have been used instead of a compare and bcc
+
+		move.b	d0,d1
+		andi.w	#$F,d7	; get palette index
+		andi.w	#$70,d1	; get repeat count for palette index
+		or.w	d1,d7	; combine the two
+		andi.w	#$F,d0	; get the length of the code in bits
+		move.b	d0,d1
+		lsl.w	#8,d1
+		or.w	d1,d7	; combine with palette index and repeat count to form code table entry
+		moveq	#8,d1
+		sub.w	d0,d1	; is the code 8 bits long?
+		bne.s	NemBCT_ShortCode	; if not, a bit of extra processing is needed
+		move.b	(a0)+,d0	; get code
+		add.w	d0,d0	; each code gets a word-sized entry in the table
+		move.w	d7,(a1,d0.w)	; store the entry for the code
+		bra.s	NemBCT_Loop	; repeat
+; ===========================================================================
+
+; the Nemesis decompressor uses prefix-free codes (no valid code is a prefix of a longer code)
+; e.g. if 10 is a valid 2-bit code, 110 is a valid 3-bit code but 100 isn't
+; also, when the actual compressed data is processed the high bit of each code is in bit position 7
+; so the code needs to be bit-shifted appropriately over here before being used as a code table index
+; additionally, the code needs multiple entries in the table because no masking is done during compressed data processing
+; so if 11000 is a valid code then all indices of the form 11000XXX need to have the same entry
+NemBCT_ShortCode:
+		move.b	(a0)+,d0	; get code
+		lsl.w	d1,d0	; get index into code table
+		add.w	d0,d0	; shift so that high bit is in bit position 7
+		moveq	#1,d5
+		lsl.w	d1,d5
+		subq.w	#1,d5	; d5 = 2^d1 - 1
+
+NemBCT_ShortCode_Loop:
+		move.w	d7,(a1,d0.w)	; store entry
+		addq.w	#2,d0	; increment index
+		dbf	d5,NemBCT_ShortCode_Loop	; repeat for required number of entries
+		bra.s	NemBCT_Loop
+; End of function NemDec_BuildCodeTable
+
 
 
 ; ---------------------------------------------------------------------------
@@ -1394,10 +1673,640 @@ QuickPLC:
 		rts	
 ; End of function QuickPLC
 
-		include	"_inc\Enigma Decompression.asm"
-		include	"_inc\Kosinski Decompression.asm"
+; ---------------------------------------------------------------------------
+; Enigma decompression algorithm
 
-		include	"_inc\PaletteCycle.asm"
+; input:
+;	d0 = starting art tile (added to each 8x8 before writing to destination)
+;	a0 = source address
+;	a1 = destination address
+
+; usage:
+;	lea	(source).l,a0
+;	lea	(destination).l,a1
+;	move.w	#arttile,d0
+;	bsr.w	EniDec
+
+; See http://www.segaretro.org/Enigma_compression for format description
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+EniDec:
+		movem.l	d0-d7/a1-a5,-(sp)
+		movea.w	d0,a3		; store starting art tile
+		move.b	(a0)+,d0
+		ext.w	d0
+		movea.w	d0,a5		; store number of bits in inline copy value
+		move.b	(a0)+,d4
+		lsl.b	#3,d4		; store PCCVH flags bitfield
+		movea.w	(a0)+,a2
+		adda.w	a3,a2		; store incremental copy word
+		movea.w	(a0)+,a4
+		adda.w	a3,a4		; store literal copy word
+		move.b	(a0)+,d5
+		asl.w	#8,d5
+		move.b	(a0)+,d5	; get first word in format list
+		moveq	#16,d6		; initial shift value
+; loc_173E:
+Eni_Loop:
+		moveq	#7,d0		; assume a format list entry is 7 bits
+		move.w	d6,d7
+		sub.w	d0,d7
+		move.w	d5,d1
+		lsr.w	d7,d1
+		andi.w	#$7F,d1		; get format list entry
+		move.w	d1,d2		; and copy it
+		cmpi.w	#$40,d1		; is the high bit of the entry set?
+		bhs.s	@sevenbitentry
+		moveq	#6,d0		; if it isn't, the entry is actually 6 bits
+		lsr.w	#1,d2
+; loc_1758:
+@sevenbitentry:
+		bsr.w	EniDec_FetchByte
+		andi.w	#$F,d2		; get repeat count
+		lsr.w	#4,d1
+		add.w	d1,d1
+		jmp	EniDec_Index(pc,d1.w)
+; End of function EniDec
+
+; ===========================================================================
+; loc_1768:
+EniDec_00:
+@loop:		move.w	a2,(a1)+	; copy incremental copy word
+		addq.w	#1,a2		; increment it
+		dbf	d2,@loop	; repeat
+		bra.s	Eni_Loop
+; ===========================================================================
+; loc_1772:
+EniDec_01:
+@loop:		move.w	a4,(a1)+	; copy literal copy word
+		dbf	d2,@loop	; repeat
+		bra.s	Eni_Loop
+; ===========================================================================
+; loc_177A:
+EniDec_100:
+		bsr.w	EniDec_FetchInlineValue
+; loc_177E:
+@loop:		move.w	d1,(a1)+	; copy inline value
+		dbf	d2,@loop	; repeat
+
+		bra.s	Eni_Loop
+; ===========================================================================
+; loc_1786:
+EniDec_101:
+		bsr.w	EniDec_FetchInlineValue
+; loc_178A:
+@loop:		move.w	d1,(a1)+	; copy inline value
+		addq.w	#1,d1		; increment
+		dbf	d2,@loop	; repeat
+
+		bra.s	Eni_Loop
+; ===========================================================================
+; loc_1794:
+EniDec_110:
+		bsr.w	EniDec_FetchInlineValue
+; loc_1798:
+@loop:		move.w	d1,(a1)+	; copy inline value
+		subq.w	#1,d1		; decrement
+		dbf	d2,@loop	; repeat
+
+		bra.s	Eni_Loop
+; ===========================================================================
+; loc_17A2:
+EniDec_111:
+		cmpi.w	#$F,d2
+		beq.s	EniDec_Done
+; loc_17A8:
+@loop:		bsr.w	EniDec_FetchInlineValue	; fetch new inline value
+		move.w	d1,(a1)+	; copy it
+		dbf	d2,@loop	; and repeat
+
+		bra.s	Eni_Loop
+; ===========================================================================
+; loc_17B4:
+EniDec_Index:
+		bra.s	EniDec_00
+		bra.s	EniDec_00
+		bra.s	EniDec_01
+		bra.s	EniDec_01
+		bra.s	EniDec_100
+		bra.s	EniDec_101
+		bra.s	EniDec_110
+		bra.s	EniDec_111
+; ===========================================================================
+; loc_17C4:
+EniDec_Done:
+		subq.w	#1,a0		; go back by one byte
+		cmpi.w	#16,d6		; were we going to start on a completely new byte?
+		bne.s	@notnewbyte	; if not, branch
+		subq.w	#1,a0		; and another one if needed
+; loc_17CE:
+@notnewbyte:
+		move.w	a0,d0
+		lsr.w	#1,d0		; are we on an odd byte?
+		bcc.s	@evenbyte	; if not, branch
+		addq.w	#1,a0		; ensure we're on an even byte
+; loc_17D6:
+@evenbyte:
+		movem.l	(sp)+,d0-d7/a1-a5
+		rts
+
+; ---------------------------------------------------------------------------
+; Part of the Enigma decompressor
+; Fetches an inline copy value and stores it in d1
+; ---------------------------------------------------------------------------
+
+; =============== S U B R O U T I N E =======================================
+
+; loc_17DC:
+EniDec_FetchInlineValue:
+		move.w	a3,d3		; copy starting art tile
+		move.b	d4,d1		; copy PCCVH bitfield
+		add.b	d1,d1		; is the priority bit set?
+		bcc.s	@skippriority	; if not, branch
+		subq.w	#1,d6
+		btst	d6,d5		; is the priority bit set in the inline render flags?
+		beq.s	@skippriority	; if not, branch
+		ori.w	#$8000,d3	; otherwise set priority bit in art tile
+; loc_17EE:
+@skippriority:
+		add.b	d1,d1		; is the high palette line bit set?
+		bcc.s	@skiphighpal	; if not, branch
+		subq.w	#1,d6
+		btst	d6,d5
+		beq.s	@skiphighpal
+		addi.w	#$4000,d3	; set second palette line bit
+; loc_17FC:
+@skiphighpal:
+		add.b	d1,d1		; is the low palette line bit set?
+		bcc.s	@skiplowpal	; if not, branch
+		subq.w	#1,d6
+		btst	d6,d5
+		beq.s	@skiplowpal
+		addi.w	#$2000,d3	; set first palette line bit
+; loc_180A:
+@skiplowpal:
+		add.b	d1,d1		; is the vertical flip flag set?
+		bcc.s	@skipyflip	; if not, branch
+		subq.w	#1,d6
+		btst	d6,d5
+		beq.s	@skipyflip
+		ori.w	#$1000,d3	; set Y-flip bit
+; loc_1818:
+@skipyflip:
+		add.b	d1,d1		; is the horizontal flip flag set?
+		bcc.s	@skipxflip	; if not, branch
+		subq.w	#1,d6
+		btst	d6,d5
+		beq.s	@skipxflip
+		ori.w	#$800,d3	; set X-flip bit
+; loc_1826:
+@skipxflip:
+		move.w	d5,d1
+		move.w	d6,d7
+		sub.w	a5,d7		; subtract length in bits of inline copy value
+		bcc.s	@enoughbits	; branch if a new word doesn't need to be read
+		move.w	d7,d6
+		addi.w	#16,d6
+		neg.w	d7		; calculate bit deficit
+		lsl.w	d7,d1		; and make space for that many bits
+		move.b	(a0),d5		; get next byte
+		rol.b	d7,d5		; and rotate the required bits into the lowest positions
+		add.w	d7,d7
+		and.w	EniDec_Masks-2(pc,d7.w),d5
+		add.w	d5,d1		; combine upper bits with lower bits
+; loc_1844:
+@maskvalue:
+		move.w	a5,d0		; get length in bits of inline copy value
+		add.w	d0,d0
+		and.w	EniDec_Masks-2(pc,d0.w),d1	; mask value appropriately
+		add.w	d3,d1		; add starting art tile
+		move.b	(a0)+,d5
+		lsl.w	#8,d5
+		move.b	(a0)+,d5	; get next word
+		rts
+; ===========================================================================
+; loc_1856:
+@enoughbits:
+		beq.s	@justenough	; if the word has been exactly exhausted, branch
+		lsr.w	d7,d1	; get inline copy value
+		move.w	a5,d0
+		add.w	d0,d0
+		and.w	EniDec_Masks-2(pc,d0.w),d1	; and mask it appropriately
+		add.w	d3,d1	; add starting art tile
+		move.w	a5,d0
+		bra.s	EniDec_FetchByte
+; ===========================================================================
+; loc_1868:
+@justenough:
+		moveq	#16,d6	; reset shift value
+		bra.s	@maskvalue
+; ===========================================================================
+; word_186C:
+EniDec_Masks:
+		dc.w	 1,    3,    7,   $F
+		dc.w   $1F,  $3F,  $7F,  $FF
+		dc.w  $1FF, $3FF, $7FF, $FFF
+		dc.w $1FFF,$3FFF,$7FFF,$FFFF
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+; sub_188C:
+EniDec_FetchByte:
+		sub.w	d0,d6	; subtract length of current entry from shift value so that next entry is read next time around
+		cmpi.w	#9,d6	; does a new byte need to be read?
+		bhs.s	@locret	; if not, branch
+		addq.w	#8,d6
+		asl.w	#8,d5
+		move.b	(a0)+,d5
+@locret:
+		rts
+; End of function EniDec_FetchByte
+
+
+; ---------------------------------------------------------------------------
+; Kosinski decompression algorithm
+
+; input:
+;	a0 = source address
+;	a1 = destination address
+
+; usage:
+;	lea	(source).l,a0
+;	lea	(destination).l,a1
+;	bsr.w	KosDec
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+KosDec:
+
+		subq.l	#2,sp	; make space for 2 bytes on the stack
+		move.b	(a0)+,1(sp)
+		move.b	(a0)+,(sp)
+		move.w	(sp),d5	; get first description field
+		moveq	#$F,d4	; set to loop for 16 bits
+
+Kos_Loop:
+		lsr.w	#1,d5	; shift bit into the c flag
+		move	sr,d6
+		dbf	d4,@chkbit
+		move.b	(a0)+,1(sp)
+		move.b	(a0)+,(sp)
+		move.w	(sp),d5
+		moveq	#$F,d4
+
+	@chkbit:
+		move	d6,ccr	; was the bit set?
+		bcc.s	Kos_RLE	; if not, branch
+
+		move.b	(a0)+,(a1)+ ; copy byte as-is
+		bra.s	Kos_Loop
+; ===========================================================================
+
+Kos_RLE:
+		moveq	#0,d3
+		lsr.w	#1,d5	; get next bit
+		move	sr,d6
+		dbf	d4,@chkbit
+		move.b	(a0)+,1(sp)
+		move.b	(a0)+,(sp)
+		move.w	(sp),d5
+		moveq	#$F,d4
+
+	@chkbit:
+		move	d6,ccr	; was the bit set?
+		bcs.s	Kos_SeparateRLE ; if yes, branch
+
+		lsr.w	#1,d5	; shift bit into the x flag
+		dbf	d4,@loop1
+		move.b	(a0)+,1(sp)
+		move.b	(a0)+,(sp)
+		move.w	(sp),d5
+		moveq	#$F,d4
+
+	@loop1:
+		roxl.w	#1,d3	; get high repeat count bit
+		lsr.w	#1,d5
+		dbf	d4,@loop2
+		move.b	(a0)+,1(sp)
+		move.b	(a0)+,(sp)
+		move.w	(sp),d5
+		moveq	#$F,d4
+
+	@loop2:
+		roxl.w	#1,d3	; get low repeat count bit
+		addq.w	#1,d3	; increment repeat count
+		moveq	#-1,d2
+		move.b	(a0)+,d2 ; calculate offset
+		bra.s	Kos_RLELoop
+; ===========================================================================
+
+Kos_SeparateRLE:
+		move.b	(a0)+,d0 ; get first byte
+		move.b	(a0)+,d1 ; get second byte
+		moveq	#-1,d2
+		move.b	d1,d2
+		lsl.w	#5,d2
+		move.b	d0,d2	; calculate offset
+		andi.w	#7,d1	; does a third byte need to be read?
+		beq.s	Kos_SeparateRLE2 ; if yes, branch
+		move.b	d1,d3	; copy repeat count
+		addq.w	#1,d3	; increment
+
+Kos_RLELoop:
+		move.b	(a1,d2.w),d0 ; copy appropriate byte
+		move.b	d0,(a1)+ ; repeat
+		dbf	d3,Kos_RLELoop
+		bra.s	Kos_Loop
+; ===========================================================================
+
+Kos_SeparateRLE2:
+		move.b	(a0)+,d1
+		beq.s	Kos_Done ; 0 indicates end of compressed data
+		cmpi.b	#1,d1
+		beq.w	Kos_Loop ; 1 indicates new description to be read
+		move.b	d1,d3	; otherwise, copy repeat count
+		bra.s	Kos_RLELoop
+; ===========================================================================
+
+Kos_Done:
+		addq.l	#2,sp	; restore stack pointer
+		rts
+; End of function KosDec
+
+
+
+; ---------------------------------------------------------------------------
+; Palette cycling routine loading subroutine
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+PaletteCycle:
+		moveq	#0,d2
+		moveq	#0,d0
+		move.b	(v_zone).w,d0	; get level number
+		add.w	d0,d0
+		move.w	PCycle_Index(pc,d0.w),d0
+		jmp	PCycle_Index(pc,d0.w) ; jump to relevant palette routine
+; End of function PaletteCycle
+
+; ===========================================================================
+; ---------------------------------------------------------------------------
+; Palette cycling routines
+; ---------------------------------------------------------------------------
+PCycle_Index:	dc.w PCycle_GHZ-PCycle_Index
+		dc.w PCycle_LZ-PCycle_Index
+		dc.w PCycle_MZ-PCycle_Index
+		dc.w PalCycle_SLZ-PCycle_Index
+		dc.w PalCycle_SYZ-PCycle_Index
+		dc.w PalCycle_SBZ-PCycle_Index
+		zonewarning PCycle_Index,2
+		dc.w PCycle_GHZ-PCycle_Index	; Ending
+
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+PCycle_Title:
+		lea	(Pal_TitleCyc).l,a0
+		bra.s	PCycGHZ_Go
+; ===========================================================================
+
+PCycle_GHZ:
+		lea	(Pal_GHZCyc).l,a0
+
+PCycGHZ_Go:
+		subq.w	#1,(v_pcyc_time).w ; decrement timer
+		bpl.s	PCycGHZ_Skip	; if time remains, branch
+
+		move.w	#5,(v_pcyc_time).w ; reset timer to 5 frames
+		move.w	(v_pcyc_num).w,d0 ; get cycle number
+		addq.w	#1,(v_pcyc_num).w ; increment cycle number
+		andi.w	#3,d0		; if cycle > 3, reset to 0
+		lsl.w	#3,d0
+		lea	(v_pal_dry+$50).w,a1
+		move.l	(a0,d0.w),(a1)+
+		move.l	4(a0,d0.w),(a1)	; copy palette data to RAM
+
+PCycGHZ_Skip:
+		rts
+; End of function PCycle_GHZ
+
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+PCycle_LZ:
+; Waterfalls
+		subq.w	#1,(v_pcyc_time).w ; decrement timer
+		bpl.s	PCycLZ_Skip1	; if time remains, branch
+
+		move.w	#2,(v_pcyc_time).w ; reset timer to 2 frames
+		move.w	(v_pcyc_num).w,d0
+		addq.w	#1,(v_pcyc_num).w ; increment cycle number
+		andi.w	#3,d0		; if cycle > 3, reset to 0
+		lsl.w	#3,d0
+		lea	(Pal_LZCyc1).l,a0
+		cmpi.b	#3,(v_act).w	; check if level is SBZ3
+		bne.s	PCycLZ_NotSBZ3
+		lea	(Pal_SBZ3Cyc).l,a0 ; load SBZ3	palette instead
+
+	PCycLZ_NotSBZ3:
+		lea	(v_pal_dry+$56).w,a1
+		move.l	(a0,d0.w),(a1)+
+		move.l	4(a0,d0.w),(a1)
+		lea	(v_pal_water+$56).w,a1
+		move.l	(a0,d0.w),(a1)+
+		move.l	4(a0,d0.w),(a1)
+
+PCycLZ_Skip1:
+; Conveyor belts
+		move.w	(v_framecount).w,d0
+		andi.w	#7,d0
+		move.b	PCycLZ_Seq(pc,d0.w),d0 ; get byte from palette sequence
+		beq.s	PCycLZ_Skip2	; if byte is 0, branch
+		moveq	#1,d1
+		tst.b	(f_conveyrev).w	; have conveyor belts been reversed?
+		beq.s	PCycLZ_NoRev	; if not, branch
+		neg.w	d1
+
+	PCycLZ_NoRev:
+		move.w	(v_pal_buffer).w,d0
+		andi.w	#3,d0
+		add.w	d1,d0
+		cmpi.w	#3,d0
+		bcs.s	loc_1A0A
+		move.w	d0,d1
+		moveq	#0,d0
+		tst.w	d1
+		bpl.s	loc_1A0A
+		moveq	#2,d0
+
+loc_1A0A:
+		move.w	d0,(v_pal_buffer).w
+		add.w	d0,d0
+		move.w	d0,d1
+		add.w	d0,d0
+		add.w	d1,d0
+		lea	(Pal_LZCyc2).l,a0
+		lea	(v_pal_dry+$76).w,a1
+		move.l	(a0,d0.w),(a1)+
+		move.w	4(a0,d0.w),(a1)
+		lea	(Pal_LZCyc3).l,a0
+		lea	(v_pal_water+$76).w,a1
+		move.l	(a0,d0.w),(a1)+
+		move.w	4(a0,d0.w),(a1)
+
+PCycLZ_Skip2:
+		rts
+; End of function PCycle_LZ
+
+; ===========================================================================
+PCycLZ_Seq:	dc.b 1,	0, 0, 1, 0, 0, 1, 0
+; ===========================================================================
+
+PCycle_MZ:
+		rts
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+PalCycle_SLZ:
+		subq.w	#1,(v_pcyc_time).w
+		bpl.s	locret_1A80
+		move.w	#7,(v_pcyc_time).w
+		move.w	(v_pcyc_num).w,d0
+		addq.w	#1,d0
+		cmpi.w	#6,d0
+		bcs.s	loc_1A60
+		moveq	#0,d0
+
+loc_1A60:
+		move.w	d0,(v_pcyc_num).w
+		move.w	d0,d1
+		add.w	d1,d1
+		add.w	d1,d0
+		add.w	d0,d0
+		lea	(Pal_SLZCyc).l,a0
+		lea	(v_pal_dry+$56).w,a1
+		move.w	(a0,d0.w),(a1)
+		move.l	2(a0,d0.w),4(a1)
+
+locret_1A80:
+		rts
+; End of function PalCycle_SLZ
+
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+PalCycle_SYZ:
+		subq.w	#1,(v_pcyc_time).w
+		bpl.s	locret_1AC6
+		move.w	#5,(v_pcyc_time).w
+		move.w	(v_pcyc_num).w,d0
+		addq.w	#1,(v_pcyc_num).w
+		andi.w	#3,d0
+		lsl.w	#2,d0
+		move.w	d0,d1
+		add.w	d0,d0
+		lea	(Pal_SYZCyc1).l,a0
+		lea	(v_pal_dry+$6E).w,a1
+		move.l	(a0,d0.w),(a1)+
+		move.l	4(a0,d0.w),(a1)
+		lea	(Pal_SYZCyc2).l,a0
+		lea	(v_pal_dry+$76).w,a1
+		move.w	(a0,d1.w),(a1)
+		move.w	2(a0,d1.w),4(a1)
+
+locret_1AC6:
+		rts
+; End of function PalCycle_SYZ
+
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+PalCycle_SBZ:
+		lea	(Pal_SBZCycList1).l,a2
+		tst.b	(v_act).w
+		beq.s	loc_1ADA
+		lea	(Pal_SBZCycList2).l,a2
+
+loc_1ADA:
+		lea	(v_pal_buffer).w,a1
+		move.w	(a2)+,d1
+
+loc_1AE0:
+		subq.b	#1,(a1)
+		bmi.s	loc_1AEA
+		addq.l	#2,a1
+		addq.l	#6,a2
+		bra.s	loc_1B06
+; ===========================================================================
+
+loc_1AEA:
+		move.b	(a2)+,(a1)+
+		move.b	(a1),d0
+		addq.b	#1,d0
+		cmp.b	(a2)+,d0
+		bcs.s	loc_1AF6
+		moveq	#0,d0
+
+loc_1AF6:
+		move.b	d0,(a1)+
+		andi.w	#$F,d0
+		add.w	d0,d0
+		movea.w	(a2)+,a0
+		movea.w	(a2)+,a3
+		move.w	(a0,d0.w),(a3)
+
+loc_1B06:
+		dbf	d1,loc_1AE0
+		subq.w	#1,(v_pcyc_time).w
+		bpl.s	locret_1B64
+		lea	(Pal_SBZCyc4).l,a0
+		move.w	#1,(v_pcyc_time).w
+		tst.b	(v_act).w
+		beq.s	loc_1B2E
+		lea	(Pal_SBZCyc10).l,a0
+		move.w	#0,(v_pcyc_time).w
+
+loc_1B2E:
+		moveq	#-1,d1
+		tst.b	(f_conveyrev).w
+		beq.s	loc_1B38
+		neg.w	d1
+
+loc_1B38:
+		move.w	(v_pcyc_num).w,d0
+		andi.w	#3,d0
+		add.w	d1,d0
+		cmpi.w	#3,d0
+		bcs.s	loc_1B52
+		move.w	d0,d1
+		moveq	#0,d0
+		tst.w	d1
+		bpl.s	loc_1B52
+		moveq	#2,d0
+
+loc_1B52:
+		move.w	d0,(v_pcyc_num).w
+		add.w	d0,d0
+		lea	(v_pal_dry+$58).w,a1
+		move.l	(a0,d0.w),(a1)+
+		move.w	4(a0,d0.w),(a1)
+
+locret_1B64:
+		rts
+; End of function PalCycle_SBZ
+
 
 Pal_TitleCyc:	incbin	"palette\Cycle - Title Screen Water.bin"
 Pal_GHZCyc:	incbin	"palette\Cycle - GHZ.bin"
@@ -1410,7 +2319,43 @@ Pal_SLZCyc:	incbin	"palette\Cycle - SLZ.bin"
 Pal_SYZCyc1:	incbin	"palette\Cycle - SYZ1.bin"
 Pal_SYZCyc2:	incbin	"palette\Cycle - SYZ2.bin"
 
-		include	"_inc\SBZ Palette Scripts.asm"
+; ---------------------------------------------------------------------------
+; Scrap Brain Zone palette cycling script
+; ---------------------------------------------------------------------------
+
+mSBZp:	macro duration,colours,paladdress,ramaddress
+	dc.b duration, colours
+	dc.w paladdress, ramaddress
+	endm
+
+; duration in frames, number of colours, palette address, RAM address
+
+Pal_SBZCycList1:
+	dc.w ((end_SBZCycList1-Pal_SBZCycList1-2)/6)-1
+	mSBZp	7,8,Pal_SBZCyc1,v_pal_dry+$50
+	mSBZp	$D,8,Pal_SBZCyc2,v_pal_dry+$52
+	mSBZp	$E,8,Pal_SBZCyc3,v_pal_dry+$6E
+	mSBZp	$B,8,Pal_SBZCyc5,v_pal_dry+$70
+	mSBZp	7,8,Pal_SBZCyc6,v_pal_dry+$72
+	mSBZp	$1C,$10,Pal_SBZCyc7,v_pal_dry+$7E
+	mSBZp	3,3,Pal_SBZCyc8,v_pal_dry+$78
+	mSBZp	3,3,Pal_SBZCyc8+2,v_pal_dry+$7A
+	mSBZp	3,3,Pal_SBZCyc8+4,v_pal_dry+$7C
+end_SBZCycList1:
+	even
+
+Pal_SBZCycList2:
+	dc.w ((end_SBZCycList2-Pal_SBZCycList2-2)/6)-1
+	mSBZp	7,8,Pal_SBZCyc1,v_pal_dry+$50
+	mSBZp	$D,8,Pal_SBZCyc2,v_pal_dry+$52
+	mSBZp	9,8,Pal_SBZCyc9,v_pal_dry+$70
+	mSBZp	7,8,Pal_SBZCyc6,v_pal_dry+$72
+	mSBZp	3,3,Pal_SBZCyc8,v_pal_dry+$78
+	mSBZp	3,3,Pal_SBZCyc8+2,v_pal_dry+$7A
+	mSBZp	3,3,Pal_SBZCyc8+4,v_pal_dry+$7C
+end_SBZCycList2:
+	even
+
 
 Pal_SBZCyc1:	incbin	"palette\Cycle - SBZ 1.bin"
 Pal_SBZCyc2:	incbin	"palette\Cycle - SBZ 2.bin"
@@ -1993,7 +2938,65 @@ PalLoad4_Water:
 
 ; ===========================================================================
 
-		include	"_inc\Palette Pointers.asm"
+; ---------------------------------------------------------------------------
+; Palette pointers
+; ---------------------------------------------------------------------------
+
+palp:	macro paladdress,ramaddress,colours
+	dc.l paladdress
+	dc.w ramaddress, (colours>>1)-1
+	endm
+
+PalPointers:
+
+; palette address, RAM address, colours
+
+ptr_Pal_SegaBG:		palp	Pal_SegaBG,v_pal_dry,$40		; 0 - Sega logo
+ptr_Pal_Title:		palp	Pal_Title,v_pal_dry,$40		; 1 - title screen
+ptr_Pal_LevelSel:	palp	Pal_LevelSel,v_pal_dry,$40		; 2 - level select
+ptr_Pal_Sonic:		palp	Pal_Sonic,v_pal_dry,$10		; 3 - Sonic
+Pal_Levels:
+ptr_Pal_GHZ:		palp	Pal_GHZ,v_pal_dry+$20, $30		; 4 - GHZ
+ptr_Pal_LZ:		palp	Pal_LZ,v_pal_dry+$20,$30		; 5 - LZ
+ptr_Pal_MZ:		palp	Pal_MZ,v_pal_dry+$20,$30		; 6 - MZ
+ptr_Pal_SLZ:		palp	Pal_SLZ,v_pal_dry+$20,$30		; 7 - SLZ
+ptr_Pal_SYZ:		palp	Pal_SYZ,v_pal_dry+$20,$30		; 8 - SYZ
+ptr_Pal_SBZ1:		palp	Pal_SBZ1,v_pal_dry+$20,$30		; 9 - SBZ1
+			zonewarning Pal_Levels,8
+ptr_Pal_Special:	palp	Pal_Special,v_pal_dry,$40		; $A (10) - special stage
+ptr_Pal_LZWater:	palp	Pal_LZWater,v_pal_dry,$40		; $B (11) - LZ underwater
+ptr_Pal_SBZ3:		palp	Pal_SBZ3,v_pal_dry+$20,$30		; $C (12) - SBZ3
+ptr_Pal_SBZ3Water:	palp	Pal_SBZ3Water,v_pal_dry,$40		; $D (13) - SBZ3 underwater
+ptr_Pal_SBZ2:		palp	Pal_SBZ2,v_pal_dry+$20,$30		; $E (14) - SBZ2
+ptr_Pal_LZSonWater:	palp	Pal_LZSonWater,v_pal_dry,$10	; $F (15) - LZ Sonic underwater
+ptr_Pal_SBZ3SonWat:	palp	Pal_SBZ3SonWat,v_pal_dry,$10	; $10 (16) - SBZ3 Sonic underwater
+ptr_Pal_SSResult:	palp	Pal_SSResult,v_pal_dry,$40		; $11 (17) - special stage results
+ptr_Pal_Continue:	palp	Pal_Continue,v_pal_dry,$20		; $12 (18) - special stage results continue
+ptr_Pal_Ending:		palp	Pal_Ending,v_pal_dry,$40		; $13 (19) - ending sequence
+			even
+
+
+palid_SegaBG:		equ (ptr_Pal_SegaBG-PalPointers)/8
+palid_Title:		equ (ptr_Pal_Title-PalPointers)/8
+palid_LevelSel:		equ (ptr_Pal_LevelSel-PalPointers)/8
+palid_Sonic:		equ (ptr_Pal_Sonic-PalPointers)/8
+palid_GHZ:		equ (ptr_Pal_GHZ-PalPointers)/8
+palid_LZ:		equ (ptr_Pal_LZ-PalPointers)/8
+palid_MZ:		equ (ptr_Pal_MZ-PalPointers)/8
+palid_SLZ:		equ (ptr_Pal_SLZ-PalPointers)/8
+palid_SYZ:		equ (ptr_Pal_SYZ-PalPointers)/8
+palid_SBZ1:		equ (ptr_Pal_SBZ1-PalPointers)/8
+palid_Special:		equ (ptr_Pal_Special-PalPointers)/8
+palid_LZWater:		equ (ptr_Pal_LZWater-PalPointers)/8
+palid_SBZ3:		equ (ptr_Pal_SBZ3-PalPointers)/8
+palid_SBZ3Water:	equ (ptr_Pal_SBZ3Water-PalPointers)/8
+palid_SBZ2:		equ (ptr_Pal_SBZ2-PalPointers)/8
+palid_LZSonWater:	equ (ptr_Pal_LZSonWater-PalPointers)/8
+palid_SBZ3SonWat:	equ (ptr_Pal_SBZ3SonWat-PalPointers)/8
+palid_SSResult:		equ (ptr_Pal_SSResult-PalPointers)/8
+palid_Continue:		equ (ptr_Pal_Continue-PalPointers)/8
+palid_Ending:		equ (ptr_Pal_Ending-PalPointers)/8
+
 
 ; ---------------------------------------------------------------------------
 ; Palette data
@@ -3322,8 +4325,567 @@ loc_3BC8:
 		rts	
 ; ===========================================================================
 
-		include	"_inc\LZWaterFeatures.asm"
-		include	"_inc\MoveSonicInDemo.asm"
+; ---------------------------------------------------------------------------
+; Subroutine to	do special water effects in Labyrinth Zone
+; ---------------------------------------------------------------------------
+
+LZWaterFeatures:
+		cmpi.b	#id_LZ,(v_zone).w ; check if level is LZ
+		bne.s	@notlabyrinth	; if not, branch
+		if Revision=0
+		else
+			tst.b   (f_nobgscroll).w
+			bne.s	@setheight
+		endc
+		cmpi.b	#6,(v_player+obRoutine).w ; has Sonic just died?
+		bcc.s	@setheight	; if yes, skip other effects
+
+		bsr.w	LZWindTunnels
+		bsr.w	LZWaterSlides
+		bsr.w	LZDynamicWater
+
+@setheight:
+		clr.b	(f_wtr_state).w
+		moveq	#0,d0
+		move.b	(v_oscillate+2).w,d0
+		lsr.w	#1,d0
+		add.w	(v_waterpos2).w,d0
+		move.w	d0,(v_waterpos1).w
+		move.w	(v_waterpos1).w,d0
+		sub.w	(v_screenposy).w,d0
+		bcc.s	@isbelow
+		tst.w	d0
+		bpl.s	@isbelow	; if water is below top of screen, branch
+
+		move.b	#223,(v_hbla_line).w
+		move.b	#1,(f_wtr_state).w ; screen is all underwater
+
+	@isbelow:
+		cmpi.w	#223,d0		; is water within 223 pixels of top of screen?
+		bcs.s	@isvisible	; if yes, branch
+		move.w	#223,d0
+
+	@isvisible:
+		move.b	d0,(v_hbla_line).w ; set water surface as on-screen
+
+@notlabyrinth:
+		rts
+; ===========================================================================
+; ---------------------------------------------------------------------------
+; Initial water heights
+; ---------------------------------------------------------------------------
+WaterHeight:	dc.w $B8	; Labyrinth 1
+		dc.w $328	; Labyrinth 2
+		dc.w $900	; Labyrinth 3
+		dc.w $228	; Scrap Brain 3
+		even
+; ===========================================================================
+
+; ---------------------------------------------------------------------------
+; Labyrinth dynamic water routines
+; ---------------------------------------------------------------------------
+
+LZDynamicWater:
+		moveq	#0,d0
+		move.b	(v_act).w,d0
+		add.w	d0,d0
+		move.w	DynWater_Index(pc,d0.w),d0
+		jsr	DynWater_Index(pc,d0.w)
+		moveq	#0,d1
+		move.b	(f_water).w,d1
+		move.w	(v_waterpos3).w,d0
+		sub.w	(v_waterpos2).w,d0
+		beq.s	@exit		; if water level is correct, branch
+		bcc.s	@movewater	; if water level is too high, branch
+		neg.w	d1		; set water to move up instead
+
+	@movewater:
+		add.w	d1,(v_waterpos2).w ; move water up/down
+
+	@exit:
+		rts
+; ===========================================================================
+DynWater_Index:	dc.w DynWater_LZ1-DynWater_Index
+		dc.w DynWater_LZ2-DynWater_Index
+		dc.w DynWater_LZ3-DynWater_Index
+		dc.w DynWater_SBZ3-DynWater_Index
+; ===========================================================================
+
+DynWater_LZ1:
+		move.w	(v_screenposx).w,d0
+		move.b	(v_wtr_routine).w,d2
+		bne.s	@routine2
+		move.w	#$B8,d1		; water height
+		cmpi.w	#$600,d0	; has screen reached next position?
+		bcs.s	@setwater	; if not, branch
+		move.w	#$108,d1
+		cmpi.w	#$200,(v_player+obY).w ; is Sonic above $200 y-axis?
+		bcs.s	@sonicishigh	; if yes, branch
+		cmpi.w	#$C00,d0
+		bcs.s	@setwater
+		move.w	#$318,d1
+		cmpi.w	#$1080,d0
+		bcs.s	@setwater
+		move.b	#$80,(f_switch+5).w
+		move.w	#$5C8,d1
+		cmpi.w	#$1380,d0
+		bcs.s	@setwater
+		move.w	#$3A8,d1
+		cmp.w	(v_waterpos2).w,d1 ; has water reached last height?
+		bne.s	@setwater	; if not, branch
+		move.b	#1,(v_wtr_routine).w ; use second routine next
+
+	@setwater:
+		move.w	d1,(v_waterpos3).w
+		rts
+; ===========================================================================
+
+@sonicishigh:
+		cmpi.w	#$C80,d0
+		bcs.s	@setwater
+		move.w	#$E8,d1
+		cmpi.w	#$1500,d0
+		bcs.s	@setwater
+		move.w	#$108,d1
+		bra.s	@setwater
+; ===========================================================================
+
+@routine2:
+		subq.b	#1,d2
+		bne.s	@skip
+		cmpi.w	#$2E0,(v_player+obY).w ; is Sonic above $2E0 y-axis?
+		bcc.s	@skip		; if not, branch
+		move.w	#$3A8,d1
+		cmpi.w	#$1300,d0
+		bcs.s	@setwater2
+		move.w	#$108,d1
+		move.b	#2,(v_wtr_routine).w
+
+	@setwater2:
+		move.w	d1,(v_waterpos3).w
+
+	@skip:
+		rts
+; ===========================================================================
+
+DynWater_LZ2:
+		move.w	(v_screenposx).w,d0
+		move.w	#$328,d1
+		cmpi.w	#$500,d0
+		bcs.s	@setwater
+		move.w	#$3C8,d1
+		cmpi.w	#$B00,d0
+		bcs.s	@setwater
+		move.w	#$428,d1
+
+	@setwater:
+		move.w	d1,(v_waterpos3).w
+		rts
+; ===========================================================================
+
+DynWater_LZ3:
+		move.w	(v_screenposx).w,d0
+		move.b	(v_wtr_routine).w,d2
+		bne.s	@routine2
+
+		move.w	#$900,d1
+		cmpi.w	#$600,d0	; has screen reached position?
+		bcs.s	@setwaterlz3	; if not, branch
+		cmpi.w	#$3C0,(v_player+obY).w
+		bcs.s	@setwaterlz3
+		cmpi.w	#$600,(v_player+obY).w ; is Sonic in a y-axis range?
+		bcc.s	@setwaterlz3	; if not, branch
+
+		move.w	#$4C8,d1	; set new water height
+		move.b	#$4B,(v_lvllayout+$106).w ; update level layout
+		move.b	#1,(v_wtr_routine).w ; use second routine next
+		move.w	#sfx_Rumbling,d0
+		bsr.w	PlaySound_Special ; play sound $B7 (rumbling)
+
+	@setwaterlz3:
+		move.w	d1,(v_waterpos3).w
+		move.w	d1,(v_waterpos2).w ; change water height instantly
+		rts
+; ===========================================================================
+
+@routine2:
+		subq.b	#1,d2
+		bne.s	@routine3
+		move.w	#$4C8,d1
+		cmpi.w	#$770,d0
+		bcs.s	@setwater2
+		move.w	#$308,d1
+		cmpi.w	#$1400,d0
+		bcs.s	@setwater2
+		cmpi.w	#$508,(v_waterpos3).w
+		beq.s	@sonicislow
+		cmpi.w	#$600,(v_player+obY).w ; is Sonic below $600 y-axis?
+		bcc.s	@sonicislow	; if yes, branch
+		cmpi.w	#$280,(v_player+obY).w
+		bcc.s	@setwater2
+
+@sonicislow:
+		move.w	#$508,d1
+		move.w	d1,(v_waterpos2).w
+		cmpi.w	#$1770,d0
+		bcs.s	@setwater2
+		move.b	#2,(v_wtr_routine).w
+
+	@setwater2:
+		move.w	d1,(v_waterpos3).w
+		rts
+; ===========================================================================
+
+@routine3:
+		subq.b	#1,d2
+		bne.s	@routine4
+		move.w	#$508,d1
+		cmpi.w	#$1860,d0
+		bcs.s	@setwater3
+		move.w	#$188,d1
+		cmpi.w	#$1AF0,d0
+		bcc.s	@loc_3DC6
+		cmp.w	(v_waterpos2).w,d1
+		bne.s	@setwater3
+
+	@loc_3DC6:
+		move.b	#3,(v_wtr_routine).w
+
+	@setwater3:
+		move.w	d1,(v_waterpos3).w
+		rts
+; ===========================================================================
+
+@routine4:
+		subq.b	#1,d2
+		bne.s	@routine5
+		move.w	#$188,d1
+		cmpi.w	#$1AF0,d0
+		bcs.s	@setwater4
+		move.w	#$900,d1
+		cmpi.w	#$1BC0,d0
+		bcs.s	@setwater4
+		move.b	#4,(v_wtr_routine).w
+		move.w	#$608,(v_waterpos3).w
+		move.w	#$7C0,(v_waterpos2).w
+		move.b	#1,(f_switch+8).w
+		rts
+; ===========================================================================
+
+@setwater4:
+		move.w	d1,(v_waterpos3).w
+		move.w	d1,(v_waterpos2).w
+		rts
+; ===========================================================================
+
+@routine5:
+		cmpi.w	#$1E00,d0	; has screen passed final position?
+		bcs.s	@dontset	; if not, branch
+		move.w	#$128,(v_waterpos3).w
+
+	@dontset:
+		rts
+; ===========================================================================
+
+DynWater_SBZ3:
+		move.w	#$228,d1
+		cmpi.w	#$F00,(v_screenposx).w
+		bcs.s	@setwater
+		move.w	#$4C8,d1
+
+	@setwater:
+		move.w	d1,(v_waterpos3).w
+		rts
+
+; ---------------------------------------------------------------------------
+; Labyrinth Zone "wind tunnels"	subroutine
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+LZWindTunnels:
+		tst.w	(v_debuguse).w	; is debug mode	being used?
+		bne.w	@quit	; if yes, branch
+		lea	(LZWind_Data+8).l,a2
+		moveq	#0,d0
+		move.b	(v_act).w,d0	; get act number
+		lsl.w	#3,d0		; multiply by 8
+		adda.w	d0,a2		; add to address for data
+		moveq	#0,d1
+		tst.b	(v_act).w	; is act number 1?
+		bne.s	@notact1	; if not, branch
+		moveq	#1,d1
+		subq.w	#8,a2		; use different data for act 1
+
+	@notact1:
+		lea	(v_player).w,a1
+
+@chksonic:
+		move.w	obX(a1),d0
+		cmp.w	(a2),d0
+		bcs.w	@chknext
+		cmp.w	4(a2),d0
+		bcc.w	@chknext
+		move.w	obY(a1),d2
+		cmp.w	2(a2),d2
+		bcs.s	@chknext
+		cmp.w	6(a2),d2
+		bcc.s	@chknext	; branch if Sonic is outside a range
+		move.b	(v_vbla_byte).w,d0
+		andi.b	#$3F,d0		; does VInt counter fall on 0, $40, $80 or $C0?
+		bne.s	@skipsound	; if not, branch
+		move.w	#sfx_Waterfall,d0
+		jsr	(PlaySound_Special).l	; play rushing water sound (only every $40 frames)
+
+	@skipsound:
+		tst.b	(f_wtunnelallow).w ; are wind tunnels disabled?
+		bne.w	@quit	; if yes, branch
+		cmpi.b	#4,obRoutine(a1) ; is Sonic hurt/dying?
+		bcc.s	@clrquit	; if yes, branch
+		move.b	#1,(f_wtunnelmode).w
+		subi.w	#$80,d0
+		cmp.w	(a2),d0
+		bcc.s	@movesonic
+		moveq	#2,d0
+		cmpi.b	#1,(v_act).w	; is act number 2?
+		bne.s	@notact2	; if not, branch
+		neg.w	d0
+
+	@notact2:
+		add.w	d0,obY(a1)	; adjust Sonic's y-axis for curve of tunnel
+
+@movesonic:
+		addq.w	#4,obX(a1)
+		move.w	#$400,obVelX(a1) ; move Sonic horizontally
+		move.w	#0,obVelY(a1)
+		move.b	#id_Float2,obAnim(a1)	; use floating animation
+		bset	#1,obStatus(a1)
+		btst	#0,(v_jpadhold2).w ; is up pressed?
+		beq.s	@down		; if not, branch
+		subq.w	#1,obY(a1)	; move Sonic up on pole
+
+	@down:
+		btst	#1,(v_jpadhold2).w ; is down being pressed?
+		beq.s	@end		; if not, branch
+		addq.w	#1,obY(a1)	; move Sonic down on pole
+
+	@end:
+		rts
+; ===========================================================================
+
+@chknext:
+		addq.w	#8,a2		; use second set of values (act 1 only)
+		dbf	d1,@chksonic	; on act 1, repeat for a second tunnel
+		tst.b	(f_wtunnelmode).w ; is Sonic still in a tunnel?
+		beq.s	@quit		; if yes, branch
+		move.b	#id_Walk,obAnim(a1)	; use walking animation
+
+@clrquit:
+		clr.b	(f_wtunnelmode).w ; finish tunnel
+
+@quit:
+		rts
+; End of function LZWindTunnels
+
+; ===========================================================================
+
+		;    left, top,  right, bottom boundaries
+LZWind_Data:	dc.w $A80, $300, $C10,  $380 ; act 1 values (set 1)
+		dc.w $F80, $100, $1410,	$180 ; act 1 values (set 2)
+		dc.w $460, $400, $710,  $480 ; act 2 values
+		dc.w $A20, $600, $1610, $6E0 ; act 3 values
+		dc.w $C80, $600, $13D0, $680 ; SBZ act 3 values
+		even
+
+; ---------------------------------------------------------------------------
+; Labyrinth Zone water slide subroutine
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+LZWaterSlides:
+		lea	(v_player).w,a1
+		btst	#1,obStatus(a1)	; is Sonic jumping?
+		bne.s	loc_3F6A	; if not, branch
+		move.w	obY(a1),d0
+		lsr.w	#1,d0
+		andi.w	#$380,d0
+		move.b	obX(a1),d1
+		andi.w	#$7F,d1
+		add.w	d1,d0
+		lea	(v_lvllayout).w,a2
+		move.b	(a2,d0.w),d0
+		lea	Slide_Chunks_End(pc),a2
+		moveq	#Slide_Chunks_End-Slide_Chunks-1,d1
+
+loc_3F62:
+		cmp.b	-(a2),d0
+		dbeq	d1,loc_3F62
+		beq.s	LZSlide_Move
+
+loc_3F6A:
+		tst.b	(f_slidemode).w
+		beq.s	locret_3F7A
+		move.w	#5,$3E(a1)
+		clr.b	(f_slidemode).w
+
+locret_3F7A:
+		rts
+; ===========================================================================
+
+LZSlide_Move:
+		cmpi.w	#3,d1
+		bcc.s	loc_3F84
+		nop
+
+loc_3F84:
+		bclr	#0,obStatus(a1)
+		move.b	Slide_Speeds(pc,d1.w),d0
+		move.b	d0,obInertia(a1)
+		bpl.s	loc_3F9A
+		bset	#0,obStatus(a1)
+
+loc_3F9A:
+		clr.b	obInertia+1(a1)
+		move.b	#id_WaterSlide,obAnim(a1) ; use Sonic's "sliding" animation
+		move.b	#1,(f_slidemode).w	; set water slide flag
+		move.b	(v_vbla_byte).w,d0
+		andi.b	#$1F,d0
+		bne.s	locret_3FBE
+		move.w	#sfx_Waterfall,d0
+		jsr	(PlaySound_Special).l	; play water sound
+
+locret_3FBE:
+		rts
+; End of function LZWaterSlides
+
+; ===========================================================================
+; byte_3FC0:
+Slide_Speeds:
+		dc.b $A, $F5, $A, $F6, $F5, $F4, $B
+		even
+
+Slide_Chunks:
+		dc.b 2, 7, 3, $4C, $4B, 8, 4
+; byte_3FCF
+Slide_Chunks_End
+		even
+
+
+; ---------------------------------------------------------------------------
+; Subroutine to	move Sonic in demo mode
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+MoveSonicInDemo:
+		tst.w	(f_demo).w	; is demo mode on?
+		bne.s	MDemo_On	; if yes, branch
+		rts
+; ===========================================================================
+
+; This is an unused subroutine for recording a demo
+
+DemoRecorder:
+		lea	($80000).l,a1
+		move.w	(v_btnpushtime1).w,d0
+		adda.w	d0,a1
+		move.b	(v_jpadhold1).w,d0
+		cmp.b	(a1),d0
+		bne.s	@next
+		addq.b	#1,1(a1)
+		cmpi.b	#$FF,1(a1)
+		beq.s	@next
+		rts
+
+	@next:
+		move.b	d0,2(a1)
+		move.b	#0,3(a1)
+		addq.w	#2,(v_btnpushtime1).w
+		andi.w	#$3FF,(v_btnpushtime1).w
+		rts
+; ===========================================================================
+
+MDemo_On:
+		tst.b	(v_jpadhold1).w	; is start button pressed?
+		bpl.s	@dontquit	; if not, branch
+		tst.w	(f_demo).w	; is this an ending sequence demo?
+		bmi.s	@dontquit	; if yes, branch
+		move.b	#id_Title,(v_gamemode).w ; go to title screen
+
+	@dontquit:
+		lea	(DemoDataPtr).l,a1
+		moveq	#0,d0
+		move.b	(v_zone).w,d0
+		cmpi.b	#id_Special,(v_gamemode).w ; is this a special stage?
+		bne.s	@notspecial	; if not, branch
+		moveq	#6,d0		; use demo #6
+
+	@notspecial:
+		lsl.w	#2,d0
+		movea.l	(a1,d0.w),a1	; fetch address for demo data
+		tst.w	(f_demo).w	; is this an ending sequence demo?
+		bpl.s	@notcredits	; if not, branch
+		lea	(DemoEndDataPtr).l,a1
+		move.w	(v_creditsnum).w,d0
+		subq.w	#1,d0
+		lsl.w	#2,d0
+		movea.l	(a1,d0.w),a1	; fetch address for credits demo
+
+	@notcredits:
+		move.w	(v_btnpushtime1).w,d0
+		adda.w	d0,a1
+		move.b	(a1),d0
+		lea	(v_jpadhold1).w,a0
+		move.b	d0,d1
+		if Revision=0
+		move.b	(a0),d2
+		else
+			moveq	#0,d2
+		endc
+		eor.b	d2,d0
+		move.b	d1,(a0)+
+		and.b	d1,d0
+		move.b	d0,(a0)+
+		subq.b	#1,(v_btnpushtime2).w
+		bcc.s	@end
+		move.b	3(a1),(v_btnpushtime2).w
+		addq.w	#2,(v_btnpushtime1).w
+
+	@end:
+		rts
+; End of function MoveSonicInDemo
+
+; ===========================================================================
+; ---------------------------------------------------------------------------
+; Demo sequence	pointers
+; ---------------------------------------------------------------------------
+DemoDataPtr:	dc.l Demo_GHZ		; demos run after the title screen
+		dc.l Demo_GHZ
+		dc.l Demo_MZ
+		dc.l Demo_MZ
+		dc.l Demo_SYZ
+		dc.l Demo_SYZ
+		dc.l Demo_SS
+		dc.l Demo_SS
+
+DemoEndDataPtr:	dc.l Demo_EndGHZ1	; demos run during the credits
+		dc.l Demo_EndMZ
+		dc.l Demo_EndSYZ
+		dc.l Demo_EndLZ
+		dc.l Demo_EndSLZ
+		dc.l Demo_EndSBZ1
+		dc.l Demo_EndSBZ2
+		dc.l Demo_EndGHZ2
+
+		dc.b 0,	$8B, 8,	$37, 0,	$42, 8,	$5C, 0,	$6A, 8,	$5F, 0,	$2F, 8,	$2C
+		dc.b 0,	$21, 8,	3, $28,	$30, 8,	8, 0, $2E, 8, $15, 0, $F, 8, $46
+		dc.b 0,	$1A, 8,	$FF, 8,	$CA, 0,	0, 0, 0, 0, 0, 0, 0, 0,	0
+		even
+
 
 ; ---------------------------------------------------------------------------
 ; Collision index pointer loading subroutine
@@ -3353,7 +4915,109 @@ ColPointers:	dc.l Col_GHZ
 		zonewarning ColPointers,4
 ;		dc.l Col_GHZ ; Pointer for Ending is missing by default.
 
-		include	"_inc\Oscillatory Routines.asm"
+; ---------------------------------------------------------------------------
+; Oscillating number subroutines
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+; Initialise the values
+
+OscillateNumInit:
+		lea	(v_oscillate).w,a1
+		lea	(@baselines).l,a2
+		moveq	#$20,d1
+
+	@loop:
+		move.w	(a2)+,(a1)+	; copy baseline values to RAM
+		dbf	d1,@loop
+		rts
+
+
+; ===========================================================================
+@baselines:	dc.w %0000000001111100	; oscillation direction bitfield
+		dc.w $80, 0
+		dc.w $80, 0
+		dc.w $80, 0
+		dc.w $80, 0
+		dc.w $80, 0
+		dc.w $80, 0
+		dc.w $80, 0
+		dc.w $80, 0
+		dc.w $80, 0
+		dc.w $50F0, $11E
+		dc.w $2080, $B4
+		dc.w $3080, $10E
+		dc.w $5080, $1C2
+		dc.w $7080, $276
+		dc.w $80, 0
+		dc.w $80, 0
+		even
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+; Oscillate values
+
+OscillateNumDo:
+		cmpi.b	#6,(v_player+obRoutine).w ; has Sonic just died?
+		bcc.s	@end		; if yes, branch
+		lea	(v_oscillate).w,a1
+		lea	(@settings).l,a2
+		move.w	(a1)+,d3	; get oscillation direction bitfield
+		moveq	#$F,d1
+
+@loop:
+		move.w	(a2)+,d2	; get frequency
+		move.w	(a2)+,d4	; get amplitude
+		btst	d1,d3		; check oscillation direction
+		bne.s	@down		; branch if 1
+
+	@up:
+		move.w	2(a1),d0	; get current rate
+		add.w	d2,d0		; add frequency
+		move.w	d0,2(a1)
+		add.w	d0,0(a1)	; add rate to value
+		cmp.b	0(a1),d4
+		bhi.s	@next
+		bset	d1,d3
+		bra.s	@next
+
+	@down:
+		move.w	2(a1),d0
+		sub.w	d2,d0
+		move.w	d0,2(a1)
+		add.w	d0,0(a1)
+		cmp.b	0(a1),d4
+		bls.s	@next
+		bclr	d1,d3
+
+	@next:
+		addq.w	#4,a1
+		dbf	d1,@loop
+		move.w	d3,(v_oscillate).w
+
+@end:
+		rts
+; End of function OscillateNumDo
+
+; ===========================================================================
+@settings:	dc.w 2,	$10	; frequency, amplitude
+		dc.w 2,	$18
+		dc.w 2,	$20
+		dc.w 2,	$30
+		dc.w 4,	$20
+		dc.w 8,	8
+		dc.w 8,	$40
+		dc.w 4,	$40
+		dc.w 2,	$50
+		dc.w 2,	$50
+		dc.w 2,	$20
+		dc.w 3,	$30
+		dc.w 5,	$50
+		dc.w 7,	$70
+		dc.w 2,	$10
+		dc.w 2,	$10
+		even
 
 ; ---------------------------------------------------------------------------
 ; Subroutine to	change synchronised animation variables (rings, giant rings)
@@ -5110,11 +6774,2516 @@ Demo_EndGHZ2:	incbin	"demodata\Ending - GHZ2.bin"
 		even
 
 		if Revision=0
-		include	"_inc\LevelSizeLoad & BgScrollSpeed.asm"
-		include	"_inc\DeformLayers.asm"
+
+; ---------------------------------------------------------------------------
+; Subroutine to	load level boundaries and start	locations
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+LevelSizeLoad:
+		moveq	#0,d0
+		move.b	d0,($FFFFF740).w
+		move.b	d0,($FFFFF741).w
+		move.b	d0,($FFFFF746).w
+		move.b	d0,($FFFFF748).w
+		move.b	d0,(v_dle_routine).w
+		move.w	(v_zone).w,d0
+		lsl.b	#6,d0
+		lsr.w	#4,d0
+		move.w	d0,d1
+		add.w	d0,d0
+		add.w	d1,d0
+		lea	LevelSizeArray(pc,d0.w),a0 ; load level	boundaries
+		move.w	(a0)+,d0
+		move.w	d0,($FFFFF730).w
+		move.l	(a0)+,d0
+		move.l	d0,(v_limitleft2).w
+		move.l	d0,(v_limitleft1).w
+		move.l	(a0)+,d0
+		move.l	d0,(v_limittop2).w
+		move.l	d0,(v_limittop1).w
+		move.w	(v_limitleft2).w,d0
+		addi.w	#$240,d0
+		move.w	d0,(v_limitleft3).w
+		move.w	#$1010,($FFFFF74A).w
+		move.w	(a0)+,d0
+		move.w	d0,(v_lookshift).w
+		bra.w	LevSz_ChkLamp
+; ===========================================================================
+; ---------------------------------------------------------------------------
+; Level size array
+; ---------------------------------------------------------------------------
+LevelSizeArray:
+		; GHZ
+		dc.w $0004, $0000, $24BF, $0000, $0300, $0060
+		dc.w $0004, $0000, $1EBF, $0000, $0300, $0060
+		dc.w $0004, $0000, $2960, $0000, $0300, $0060
+		dc.w $0004, $0000, $2ABF, $0000, $0300, $0060
+		; LZ
+		dc.w $0004, $0000, $19BF, $0000, $0530, $0060
+		dc.w $0004, $0000, $10AF, $0000, $0720, $0060
+		dc.w $0004, $0000, $202F, $FF00, $0800, $0060
+		dc.w $0004, $0000, $20BF, $0000, $0720, $0060
+		; MZ
+		dc.w $0004, $0000, $17BF, $0000, $01D0, $0060
+		dc.w $0004, $0000, $17BF, $0000, $0520, $0060
+		dc.w $0004, $0000, $1800, $0000, $0720, $0060
+		dc.w $0004, $0000, $16BF, $0000, $0720, $0060
+		; SLZ
+		dc.w $0004, $0000, $1FBF, $0000, $0640, $0060
+		dc.w $0004, $0000, $1FBF, $0000, $0640, $0060
+		dc.w $0004, $0000, $2000, $0000, $06C0, $0060
+		dc.w $0004, $0000, $3EC0, $0000, $0720, $0060
+		; SYZ
+		dc.w $0004, $0000, $22C0, $0000, $0420, $0060
+		dc.w $0004, $0000, $28C0, $0000, $0520, $0060
+		dc.w $0004, $0000, $2C00, $0000, $0620, $0060
+		dc.w $0004, $0000, $2EC0, $0000, $0620, $0060
+		; SBZ
+		dc.w $0004, $0000, $21C0, $0000, $0720, $0060
+		dc.w $0004, $0000, $1E40, $FF00, $0800, $0060
+		dc.w $0004, $2080, $2460, $0510, $0510, $0060
+		dc.w $0004, $0000, $3EC0, $0000, $0720, $0060
+		zonewarning LevelSizeArray,$30
+		; Ending
+		dc.w $0004, $0000, $0500, $0110, $0110, $0060
+		dc.w $0004, $0000, $0DC0, $0110, $0110, $0060
+		dc.w $0004, $0000, $2FFF, $0000, $0320, $0060
+		dc.w $0004, $0000, $2FFF, $0000, $0320, $0060
+
+; ---------------------------------------------------------------------------
+; Ending start location array
+; ---------------------------------------------------------------------------
+EndingStLocArray:
+; ---------------------------------------------------------------------------
+; Ending start location array
+; ---------------------------------------------------------------------------
+
+		incbin	"startpos\ghz1 (Credits demo 1).bin"
+		incbin	"startpos\mz2 (Credits demo).bin"
+		incbin	"startpos\syz3 (Credits demo).bin"
+		incbin	"startpos\lz3 (Credits demo).bin"
+		incbin	"startpos\slz3 (Credits demo).bin"
+		incbin	"startpos\sbz1 (Credits demo).bin"
+		incbin	"startpos\sbz2 (Credits demo).bin"
+		incbin	"startpos\ghz1 (Credits demo 2).bin"
+		even
+
+
+; ===========================================================================
+
+LevSz_ChkLamp:
+		tst.b	(v_lastlamp).w	; have any lampposts been hit?
+		beq.s	LevSz_StartLoc	; if not, branch
+
+		jsr	(Lamp_LoadInfo).l
+		move.w	(v_player+obX).w,d1
+		move.w	(v_player+obY).w,d0
+		bra.s	LevSz_SkipStartPos
+; ===========================================================================
+
+LevSz_StartLoc:
+		move.w	(v_zone).w,d0
+		lsl.b	#6,d0
+		lsr.w	#4,d0
+		lea	StartLocArray(pc,d0.w),a1 ; load Sonic's start location
+		tst.w	(f_demo).w	; is ending demo mode on?
+		bpl.s	LevSz_SonicPos	; if not, branch
+
+		move.w	(v_creditsnum).w,d0
+		subq.w	#1,d0
+		lsl.w	#2,d0
+		lea	EndingStLocArray(pc,d0.w),a1 ; load Sonic's start location
+
+LevSz_SonicPos:
+		moveq	#0,d1
+		move.w	(a1)+,d1
+		move.w	d1,(v_player+obX).w ; set Sonic's position on x-axis
+		moveq	#0,d0
+		move.w	(a1),d0
+		move.w	d0,(v_player+obY).w ; set Sonic's position on y-axis
+
+SetScreen:
+	LevSz_SkipStartPos:
+		subi.w	#160,d1		; is Sonic more than 160px from left edge?
+		bcc.s	SetScr_WithinLeft ; if yes, branch
+		moveq	#0,d1
+
+	SetScr_WithinLeft:
+		move.w	(v_limitright2).w,d2
+		cmp.w	d2,d1		; is Sonic inside the right edge?
+		bcs.s	SetScr_WithinRight ; if yes, branch
+		move.w	d2,d1
+
+	SetScr_WithinRight:
+		move.w	d1,(v_screenposx).w ; set horizontal screen position
+
+		subi.w	#96,d0		; is Sonic within 96px of upper edge?
+		bcc.s	SetScr_WithinTop ; if yes, branch
+		moveq	#0,d0
+
+	SetScr_WithinTop:
+		cmp.w	(v_limitbtm2).w,d0 ; is Sonic above the bottom edge?
+		blt.s	SetScr_WithinBottom ; if yes, branch
+		move.w	(v_limitbtm2).w,d0
+
+	SetScr_WithinBottom:
+		move.w	d0,(v_screenposy).w ; set vertical screen position
+		bsr.w	BgScrollSpeed
+		moveq	#0,d0
+		move.b	(v_zone).w,d0
+		lsl.b	#2,d0
+		move.l	LoopTileNums(pc,d0.w),(v_256loop1).w
+		bra.w	LevSz_LoadScrollBlockSize
+; ===========================================================================
+; ---------------------------------------------------------------------------
+; Sonic start location array
+; ---------------------------------------------------------------------------
+; ---------------------------------------------------------------------------
+; Sonic start location array
+; ---------------------------------------------------------------------------
+
+		incbin	"startpos\ghz1.bin"
+		incbin	"startpos\ghz2.bin"
+		incbin	"startpos\ghz3.bin"
+		dc.w	$80,$A8
+
+		incbin	"startpos\lz1.bin"
+		incbin	"startpos\lz2.bin"
+		incbin	"startpos\lz3.bin"
+		incbin	"startpos\sbz3.bin"
+
+		incbin	"startpos\mz1.bin"
+		incbin	"startpos\mz2.bin"
+		incbin	"startpos\mz3.bin"
+		dc.w	$80,$A8
+
+		incbin	"startpos\slz1.bin"
+		incbin	"startpos\slz2.bin"
+		incbin	"startpos\slz3.bin"
+		dc.w	$80,$A8
+
+		incbin	"startpos\syz1.bin"
+		incbin	"startpos\syz2.bin"
+		incbin	"startpos\syz3.bin"
+		dc.w	$80,$A8
+
+		incbin	"startpos\sbz1.bin"
+		incbin	"startpos\sbz2.bin"
+		incbin	"startpos\fz.bin"
+		dc.w	$80,$A8
+
+		zonewarning StartLocArray,$10
+
+		incbin	"startpos\end1.bin"
+		incbin	"startpos\end2.bin"
+		dc.w	$80,$A8
+		dc.w	$80,$A8
+
+		even
+
+
+; ---------------------------------------------------------------------------
+; Which	256x256	tiles contain loops or roll-tunnels
+; ---------------------------------------------------------------------------
+
+LoopTileNums:
+
+; 		loop	loop	tunnel	tunnel
+
+	dc.b	$B5,	$7F,	$1F,	$20	; Green Hill
+	dc.b	$7F,	$7F,	$7F,	$7F	; Labyrinth
+	dc.b	$7F,	$7F,	$7F,	$7F	; Marble
+	dc.b	$AA,	$B4,	$7F,	$7F	; Star Light
+	dc.b	$7F,	$7F,	$7F,	$7F	; Spring Yard
+	dc.b	$7F,	$7F,	$7F,	$7F	; Scrap Brain
+	zonewarning LoopTileNums,4
+	dc.b	$7F,	$7F,	$7F,	$7F	; Ending (Green Hill)
+
+		even
+
+; ===========================================================================
+; LevSz_Unk:
+LevSz_LoadScrollBlockSize:
+		moveq	#0,d0
+		move.b	(v_zone).w,d0
+		lsl.w	#3,d0
+		lea	BGScrollBlockSizes(pc,d0.w),a1
+		lea	(v_scroll_block_1_size).w,a2
+		move.l	(a1)+,(a2)+
+		move.l	(a1)+,(a2)+
+		rts
+; End of function LevelSizeLoad
+
+; ===========================================================================
+; dword_61B4:
+BGScrollBlockSizes:
+		; GHZ
+		dc.w $70
+		dc.w $100	; I guess these used to be per act?
+		dc.w $100	; Or maybe each scroll block got its own size?
+		dc.w $100	; Either way, these are unused now.
+		; LZ
+		dc.w $800
+		dc.w $100
+		dc.w $100
+		dc.w 0
+		; MZ
+		dc.w $800
+		dc.w $100
+		dc.w $100
+		dc.w 0
+		; SLZ
+		dc.w $800
+		dc.w $100
+		dc.w $100
+		dc.w 0
+		; SYZ
+		dc.w $800
+		dc.w $100
+		dc.w $100
+		dc.w 0
+		; SBZ
+		dc.w $800
+		dc.w $100
+		dc.w $100
+		dc.w 0
+		zonewarning BGScrollBlockSizes,8
+		; Ending
+		dc.w $70
+		dc.w $100
+		dc.w $100
+		dc.w $100
+
+; ---------------------------------------------------------------------------
+; Subroutine to	set scroll speed of some backgrounds
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+BgScrollSpeed:
+		tst.b	(v_lastlamp).w
+		bne.s	loc_6206
+		move.w	d0,(v_bgscreenposy).w
+		move.w	d0,(v_bg2screenposy).w
+		move.w	d1,(v_bgscreenposx).w
+		move.w	d1,(v_bg2screenposx).w
+		move.w	d1,(v_bg3screenposx).w
+
+loc_6206:
+		moveq	#0,d2
+		move.b	(v_zone).w,d2
+		add.w	d2,d2
+		move.w	BgScroll_Index(pc,d2.w),d2
+		jmp	BgScroll_Index(pc,d2.w)
+; End of function BgScrollSpeed
+
+; ===========================================================================
+BgScroll_Index:	dc.w BgScroll_GHZ-BgScroll_Index, BgScroll_LZ-BgScroll_Index
+		dc.w BgScroll_MZ-BgScroll_Index, BgScroll_SLZ-BgScroll_Index
+		dc.w BgScroll_SYZ-BgScroll_Index, BgScroll_SBZ-BgScroll_Index
+		zonewarning BgScroll_Index,2
+		dc.w BgScroll_End-BgScroll_Index
+; ===========================================================================
+
+BgScroll_GHZ:
+		bra.w	Deform_GHZ
+; ===========================================================================
+
+BgScroll_LZ:
+		asr.l	#1,d0
+		move.w	d0,(v_bgscreenposy).w
+		rts
+; ===========================================================================
+
+BgScroll_MZ:
+		rts
+; ===========================================================================
+
+BgScroll_SLZ:
+		asr.l	#1,d0
+		addi.w	#$C0,d0
+		move.w	d0,(v_bgscreenposy).w
+		rts
+; ===========================================================================
+
+BgScroll_SYZ:
+		asl.l	#4,d0
+		move.l	d0,d2
+		asl.l	#1,d0
+		add.l	d2,d0
+		asr.l	#8,d0
+		move.w	d0,(v_bgscreenposy).w
+		move.w	d0,(v_bg2screenposy).w
+		rts
+; ===========================================================================
+
+BgScroll_SBZ:
+		asl.l	#4,d0
+		asl.l	#1,d0
+		asr.l	#8,d0
+		move.w	d0,(v_bgscreenposy).w
+		rts
+; ===========================================================================
+
+BgScroll_End:
+		move.w	#$1E,(v_bgscreenposy).w
+		move.w	#$1E,(v_bg2screenposy).w
+		rts
+; ===========================================================================
+		move.w	#$A8,(v_bgscreenposx).w
+		move.w	#$1E,(v_bgscreenposy).w
+		move.w	#-$40,(v_bg2screenposx).w
+		move.w	#$1E,(v_bg2screenposy).w
+		rts
+
+
+; ---------------------------------------------------------------------------
+; Background layer deformation subroutines
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+DeformLayers:
+		tst.b	(f_nobgscroll).w
+		beq.s	@bgscroll
+		rts
+; ===========================================================================
+
+	@bgscroll:
+		clr.w	(v_fg_scroll_flags).w
+		clr.w	(v_bg1_scroll_flags).w
+		clr.w	(v_bg2_scroll_flags).w
+		clr.w	(v_bg3_scroll_flags).w
+		bsr.w	ScrollHoriz
+		bsr.w	ScrollVertical
+		bsr.w	DynamicLevelEvents
+		move.w	(v_screenposx).w,(v_scrposx_vdp).w
+		move.w	(v_screenposy).w,(v_scrposy_vdp).w
+		move.w	(v_bgscreenposx).w,(v_bgscrposx_vdp).w
+		move.w	(v_bgscreenposy).w,(v_bgscrposy_vdp).w
+		move.w	(v_bg3screenposx).w,(v_bg3scrposx_vdp).w
+		move.w	(v_bg3screenposy).w,(v_bg3scrposy_vdp).w
+		moveq	#0,d0
+		move.b	(v_zone).w,d0
+		add.w	d0,d0
+		move.w	Deform_Index(pc,d0.w),d0
+		jmp	Deform_Index(pc,d0.w)
+; End of function DeformLayers
+
+; ===========================================================================
+; ---------------------------------------------------------------------------
+; Offset index for background layer deformation	code
+; ---------------------------------------------------------------------------
+Deform_Index:	dc.w Deform_GHZ-Deform_Index, Deform_LZ-Deform_Index
+		dc.w Deform_MZ-Deform_Index, Deform_SLZ-Deform_Index
+		dc.w Deform_SYZ-Deform_Index, Deform_SBZ-Deform_Index
+		zonewarning Deform_Index,2
+		dc.w Deform_GHZ-Deform_Index
+; ---------------------------------------------------------------------------
+; Green	Hill Zone background layer deformation code
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+Deform_GHZ:
+		move.w	(v_scrshiftx).w,d4
+		ext.l	d4
+		asl.l	#5,d4
+		move.l	d4,d1
+		asl.l	#1,d4
+		add.l	d1,d4
+		moveq	#0,d5
+		bsr.w	ScrollBlock1
+		bsr.w	ScrollBlock4
+		lea	(v_hscrolltablebuffer).w,a1
+		move.w	(v_screenposy).w,d0
+		andi.w	#$7FF,d0
+		lsr.w	#5,d0
+		neg.w	d0
+		addi.w	#$26,d0
+		move.w	d0,(v_bg2screenposy).w
+		move.w	d0,d4
+		bsr.w	ScrollBlock3
+		move.w	(v_bgscreenposy).w,(v_bgscrposy_vdp).w
+		move.w	#$6F,d1
+		sub.w	d4,d1
+		move.w	(v_screenposx).w,d0
+		cmpi.b	#id_Title,(v_gamemode).w
+		bne.s	loc_633C
+		moveq	#0,d0
+
+loc_633C:
+		neg.w	d0
+		swap	d0
+		move.w	(v_bgscreenposx).w,d0
+		neg.w	d0
+
+loc_6346:
+		move.l	d0,(a1)+
+		dbf	d1,loc_6346
+		move.w	#$27,d1
+		move.w	(v_bg2screenposx).w,d0
+		neg.w	d0
+
+loc_6356:
+		move.l	d0,(a1)+
+		dbf	d1,loc_6356
+		move.w	(v_bg2screenposx).w,d0
+		addi.w	#0,d0
+		move.w	(v_screenposx).w,d2
+		addi.w	#-$200,d2
+		sub.w	d0,d2
+		ext.l	d2
+		asl.l	#8,d2
+		divs.w	#$68,d2
+		ext.l	d2
+		asl.l	#8,d2
+		moveq	#0,d3
+		move.w	d0,d3
+		move.w	#$47,d1
+		add.w	d4,d1
+
+loc_6384:
+		move.w	d3,d0
+		neg.w	d0
+		move.l	d0,(a1)+
+		swap	d3
+		add.l	d2,d3
+		swap	d3
+		dbf	d1,loc_6384
+		rts
+; End of function Deform_GHZ
+
+; ---------------------------------------------------------------------------
+; Labyrinth Zone background layer deformation code
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+Deform_LZ:
+		move.w	(v_scrshiftx).w,d4
+		ext.l	d4
+		asl.l	#7,d4
+		move.w	(v_scrshifty).w,d5
+		ext.l	d5
+		asl.l	#7,d5
+		bsr.w	ScrollBlock1
+		move.w	(v_bgscreenposy).w,(v_bgscrposy_vdp).w
+		lea	(v_hscrolltablebuffer).w,a1
+		move.w	#223,d1
+		move.w	(v_screenposx).w,d0
+		neg.w	d0
+		swap	d0
+		move.w	(v_bgscreenposx).w,d0
+		neg.w	d0
+
+loc_63C6:
+		move.l	d0,(a1)+
+		dbf	d1,loc_63C6
+		move.w	(v_waterpos1).w,d0
+		sub.w	(v_screenposy).w,d0
+		rts
+; End of function Deform_LZ
+
+; ---------------------------------------------------------------------------
+; Marble Zone background layer deformation code
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+Deform_MZ:
+		move.w	(v_scrshiftx).w,d4
+		ext.l	d4
+		asl.l	#6,d4
+		move.l	d4,d1
+		asl.l	#1,d4
+		add.l	d1,d4
+		moveq	#0,d5
+		bsr.w	ScrollBlock1
+		move.w	#$200,d0
+		move.w	(v_screenposy).w,d1
+		subi.w	#$1C8,d1
+		bcs.s	loc_6402
+		move.w	d1,d2
+		add.w	d1,d1
+		add.w	d2,d1
+		asr.w	#2,d1
+		add.w	d1,d0
+
+loc_6402:
+		move.w	d0,(v_bg2screenposy).w
+		bsr.w	ScrollBlock3
+		move.w	(v_bgscreenposy).w,(v_bgscrposy_vdp).w
+		lea	(v_hscrolltablebuffer).w,a1
+		move.w	#223,d1
+		move.w	(v_screenposx).w,d0
+		neg.w	d0
+		swap	d0
+		move.w	(v_bgscreenposx).w,d0
+		neg.w	d0
+
+loc_6426:
+		move.l	d0,(a1)+
+		dbf	d1,loc_6426
+		rts
+; End of function Deform_MZ
+
+; ---------------------------------------------------------------------------
+; Star Light Zone background layer deformation code
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+Deform_SLZ:
+		move.w	(v_scrshiftx).w,d4
+		ext.l	d4
+		asl.l	#7,d4
+		move.w	(v_scrshifty).w,d5
+		ext.l	d5
+		asl.l	#7,d5
+		bsr.w	ScrollBlock2
+		move.w	(v_bgscreenposy).w,(v_bgscrposy_vdp).w
+		bsr.w	Deform_SLZ_2
+		lea	(v_bgscroll_buffer).w,a2
+		move.w	(v_bgscreenposy).w,d0
+		move.w	d0,d2
+		subi.w	#$C0,d0
+		andi.w	#$3F0,d0
+		lsr.w	#3,d0
+		lea	(a2,d0.w),a2
+		lea	(v_hscrolltablebuffer).w,a1
+		move.w	#$E,d1
+		move.w	(v_screenposx).w,d0
+		neg.w	d0
+		swap	d0
+		andi.w	#$F,d2
+		add.w	d2,d2
+		move.w	(a2)+,d0
+		jmp	loc_6482(pc,d2.w)
+; ===========================================================================
+
+loc_6480:
+		move.w	(a2)+,d0
+
+loc_6482:
+		move.l	d0,(a1)+
+		move.l	d0,(a1)+
+		move.l	d0,(a1)+
+		move.l	d0,(a1)+
+		move.l	d0,(a1)+
+		move.l	d0,(a1)+
+		move.l	d0,(a1)+
+		move.l	d0,(a1)+
+		move.l	d0,(a1)+
+		move.l	d0,(a1)+
+		move.l	d0,(a1)+
+		move.l	d0,(a1)+
+		move.l	d0,(a1)+
+		move.l	d0,(a1)+
+		move.l	d0,(a1)+
+		move.l	d0,(a1)+
+		dbf	d1,loc_6480
+		rts
+; End of function Deform_SLZ
+
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+Deform_SLZ_2:
+		lea	(v_bgscroll_buffer).w,a1
+		move.w	(v_screenposx).w,d2
+		neg.w	d2
+		move.w	d2,d0
+		asr.w	#3,d0
+		sub.w	d2,d0
+		ext.l	d0
+		asl.l	#4,d0
+		divs.w	#$1C,d0
+		ext.l	d0
+		asl.l	#4,d0
+		asl.l	#8,d0
+		moveq	#0,d3
+		move.w	d2,d3
+		move.w	#$1B,d1
+
+loc_64CE:
+		move.w	d3,(a1)+
+		swap	d3
+		add.l	d0,d3
+		swap	d3
+		dbf	d1,loc_64CE
+		move.w	d2,d0
+		asr.w	#3,d0
+		move.w	#4,d1
+
+loc_64E2:
+		move.w	d0,(a1)+
+		dbf	d1,loc_64E2
+		move.w	d2,d0
+		asr.w	#2,d0
+		move.w	#4,d1
+
+loc_64F0:
+		move.w	d0,(a1)+
+		dbf	d1,loc_64F0
+		move.w	d2,d0
+		asr.w	#1,d0
+		move.w	#$1D,d1
+
+loc_64FE:
+		move.w	d0,(a1)+
+		dbf	d1,loc_64FE
+		rts
+; End of function Deform_SLZ_2
+
+; ---------------------------------------------------------------------------
+; Spring Yard Zone background layer deformation	code
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+Deform_SYZ:
+		move.w	(v_scrshiftx).w,d4
+		ext.l	d4
+		asl.l	#6,d4
+		move.w	(v_scrshifty).w,d5
+		ext.l	d5
+		asl.l	#4,d5
+		move.l	d5,d1
+		asl.l	#1,d5
+		add.l	d1,d5
+		bsr.w	ScrollBlock1
+		move.w	(v_bgscreenposy).w,(v_bgscrposy_vdp).w
+		lea	(v_hscrolltablebuffer).w,a1
+		move.w	#223,d1
+		move.w	(v_screenposx).w,d0
+		neg.w	d0
+		swap	d0
+		move.w	(v_bgscreenposx).w,d0
+		neg.w	d0
+
+loc_653C:
+		move.l	d0,(a1)+
+		dbf	d1,loc_653C
+		rts
+; End of function Deform_SYZ
+
+; ---------------------------------------------------------------------------
+; Scrap	Brain Zone background layer deformation	code
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+Deform_SBZ:
+		move.w	(v_scrshiftx).w,d4
+		ext.l	d4
+		asl.l	#6,d4
+		move.w	(v_scrshifty).w,d5
+		ext.l	d5
+		asl.l	#4,d5
+		asl.l	#1,d5
+		bsr.w	ScrollBlock1
+		move.w	(v_bgscreenposy).w,(v_bgscrposy_vdp).w
+		lea	(v_hscrolltablebuffer).w,a1
+		move.w	#223,d1
+		move.w	(v_screenposx).w,d0
+		neg.w	d0
+		swap	d0
+		move.w	(v_bgscreenposx).w,d0
+		neg.w	d0
+
+loc_6576:
+		move.l	d0,(a1)+
+		dbf	d1,loc_6576
+		rts
+; End of function Deform_SBZ
+
+; ---------------------------------------------------------------------------
+; Subroutine to	scroll the level horizontally as Sonic moves
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+ScrollHoriz:
+		move.w	(v_screenposx).w,d4 ; save old screen position
+		bsr.s	MoveScreenHoriz
+		move.w	(v_screenposx).w,d0
+		andi.w	#$10,d0
+		move.b	($FFFFF74A).w,d1
+		eor.b	d1,d0
+		bne.s	locret_65B0
+		eori.b	#$10,($FFFFF74A).w
+		move.w	(v_screenposx).w,d0
+		sub.w	d4,d0		; compare new with old screen position
+		bpl.s	SH_Forward
+
+		bset	#2,(v_fg_scroll_flags).w ; screen moves backward
+		rts
+
+	SH_Forward:
+		bset	#3,(v_fg_scroll_flags).w ; screen moves forward
+
+locret_65B0:
+		rts
+; End of function ScrollHoriz
+
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+MoveScreenHoriz:
+		move.w	(v_player+obX).w,d0
+		sub.w	(v_screenposx).w,d0 ; Sonic's distance from left edge of screen
+		subi.w	#144,d0		; is distance less than 144px?
+		bcs.s	SH_BehindMid	; if yes, branch
+		subi.w	#16,d0		; is distance more than 160px?
+		bcc.s	SH_AheadOfMid	; if yes, branch
+		clr.w	(v_scrshiftx).w
+		rts
+; ===========================================================================
+
+SH_AheadOfMid:
+		cmpi.w	#16,d0		; is Sonic within 16px of middle area?
+		bcs.s	SH_Ahead16	; if yes, branch
+		move.w	#16,d0		; set to 16 if greater
+
+	SH_Ahead16:
+		add.w	(v_screenposx).w,d0
+		cmp.w	(v_limitright2).w,d0
+		blt.s	SH_SetScreen
+		move.w	(v_limitright2).w,d0
+
+SH_SetScreen:
+		move.w	d0,d1
+		sub.w	(v_screenposx).w,d1
+		asl.w	#8,d1
+		move.w	d0,(v_screenposx).w ; set new screen position
+		move.w	d1,(v_scrshiftx).w ; set distance for screen movement
+		rts
+; ===========================================================================
+
+SH_BehindMid:
+		add.w	(v_screenposx).w,d0
+		cmp.w	(v_limitleft2).w,d0
+		bgt.s	SH_SetScreen
+		move.w	(v_limitleft2).w,d0
+		bra.s	SH_SetScreen
+; End of function MoveScreenHoriz
+
+; ===========================================================================
+		tst.w	d0
+		bpl.s	loc_6610
+		move.w	#-2,d0
+		bra.s	SH_BehindMid
+
+loc_6610:
+		move.w	#2,d0
+		bra.s	SH_AheadOfMid
+
+; ---------------------------------------------------------------------------
+; Subroutine to	scroll the level vertically as Sonic moves
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+ScrollVertical:
+		moveq	#0,d1
+		move.w	(v_player+obY).w,d0
+		sub.w	(v_screenposy).w,d0 ; Sonic's distance from top of screen
+		btst	#2,(v_player+obStatus).w ; is Sonic rolling?
+		beq.s	SV_NotRolling	; if not, branch
+		subq.w	#5,d0
+
+	SV_NotRolling:
+		btst	#1,(v_player+obStatus).w ; is Sonic jumping?
+		beq.s	loc_664A	; if not, branch
+
+		addi.w	#32,d0
+		sub.w	(v_lookshift).w,d0
+		bcs.s	loc_6696
+		subi.w	#64,d0
+		bcc.s	loc_6696
+		tst.b	(f_bgscrollvert).w
+		bne.s	loc_66A8
+		bra.s	loc_6656
+; ===========================================================================
+
+loc_664A:
+		sub.w	(v_lookshift).w,d0
+		bne.s	loc_665C
+		tst.b	(f_bgscrollvert).w
+		bne.s	loc_66A8
+
+loc_6656:
+		clr.w	(v_scrshifty).w
+		rts
+; ===========================================================================
+
+loc_665C:
+		cmpi.w	#$60,(v_lookshift).w
+		bne.s	loc_6684
+		move.w	(v_player+obInertia).w,d1
+		bpl.s	loc_666C
+		neg.w	d1
+
+loc_666C:
+		cmpi.w	#$800,d1
+		bcc.s	loc_6696
+		move.w	#$600,d1
+		cmpi.w	#6,d0
+		bgt.s	loc_66F6
+		cmpi.w	#-6,d0
+		blt.s	loc_66C0
+		bra.s	loc_66AE
+; ===========================================================================
+
+loc_6684:
+		move.w	#$200,d1
+		cmpi.w	#2,d0
+		bgt.s	loc_66F6
+		cmpi.w	#-2,d0
+		blt.s	loc_66C0
+		bra.s	loc_66AE
+; ===========================================================================
+
+loc_6696:
+		move.w	#$1000,d1
+		cmpi.w	#$10,d0
+		bgt.s	loc_66F6
+		cmpi.w	#-$10,d0
+		blt.s	loc_66C0
+		bra.s	loc_66AE
+; ===========================================================================
+
+loc_66A8:
+		moveq	#0,d0
+		move.b	d0,(f_bgscrollvert).w
+
+loc_66AE:
+		moveq	#0,d1
+		move.w	d0,d1
+		add.w	(v_screenposy).w,d1
+		tst.w	d0
+		bpl.w	loc_6700
+		bra.w	loc_66CC
+; ===========================================================================
+
+loc_66C0:
+		neg.w	d1
+		ext.l	d1
+		asl.l	#8,d1
+		add.l	(v_screenposy).w,d1
+		swap	d1
+
+loc_66CC:
+		cmp.w	(v_limittop2).w,d1
+		bgt.s	loc_6724
+		cmpi.w	#-$100,d1
+		bgt.s	loc_66F0
+		andi.w	#$7FF,d1
+		andi.w	#$7FF,(v_player+obY).w
+		andi.w	#$7FF,(v_screenposy).w
+		andi.w	#$3FF,(v_bgscreenposy).w
+		bra.s	loc_6724
+; ===========================================================================
+
+loc_66F0:
+		move.w	(v_limittop2).w,d1
+		bra.s	loc_6724
+; ===========================================================================
+
+loc_66F6:
+		ext.l	d1
+		asl.l	#8,d1
+		add.l	(v_screenposy).w,d1
+		swap	d1
+
+loc_6700:
+		cmp.w	(v_limitbtm2).w,d1
+		blt.s	loc_6724
+		subi.w	#$800,d1
+		bcs.s	loc_6720
+		andi.w	#$7FF,(v_player+obY).w
+		subi.w	#$800,(v_screenposy).w
+		andi.w	#$3FF,(v_bgscreenposy).w
+		bra.s	loc_6724
+; ===========================================================================
+
+loc_6720:
+		move.w	(v_limitbtm2).w,d1
+
+loc_6724:
+		move.w	(v_screenposy).w,d4
+		swap	d1
+		move.l	d1,d3
+		sub.l	(v_screenposy).w,d3
+		ror.l	#8,d3
+		move.w	d3,(v_scrshifty).w
+		move.l	d1,(v_screenposy).w
+		move.w	(v_screenposy).w,d0
+		andi.w	#$10,d0
+		move.b	($FFFFF74B).w,d1
+		eor.b	d1,d0
+		bne.s	locret_6766
+		eori.b	#$10,($FFFFF74B).w
+		move.w	(v_screenposy).w,d0
+		sub.w	d4,d0
+		bpl.s	loc_6760
+		bset	#0,(v_fg_scroll_flags).w
+		rts
+; ===========================================================================
+
+loc_6760:
+		bset	#1,(v_fg_scroll_flags).w
+
+locret_6766:
+		rts
+; End of function ScrollVertical
+
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+ScrollBlock1:
+		move.l	(v_bgscreenposx).w,d2
+		move.l	d2,d0
+		add.l	d4,d0
+		move.l	d0,(v_bgscreenposx).w
+		move.l	d0,d1
+		swap	d1
+		andi.w	#$10,d1
+		move.b	($FFFFF74C).w,d3
+		eor.b	d3,d1
+		bne.s	loc_679C
+		eori.b	#$10,($FFFFF74C).w
+		sub.l	d2,d0
+		bpl.s	loc_6796
+		bset	#2,(v_bg1_scroll_flags).w
+		bra.s	loc_679C
+; ===========================================================================
+
+loc_6796:
+		bset	#3,(v_bg1_scroll_flags).w
+
+loc_679C:
+		move.l	(v_bgscreenposy).w,d3
+		move.l	d3,d0
+		add.l	d5,d0
+		move.l	d0,(v_bgscreenposy).w
+		move.l	d0,d1
+		swap	d1
+		andi.w	#$10,d1
+		move.b	($FFFFF74D).w,d2
+		eor.b	d2,d1
+		bne.s	locret_67D0
+		eori.b	#$10,($FFFFF74D).w
+		sub.l	d3,d0
+		bpl.s	loc_67CA
+		bset	#0,(v_bg1_scroll_flags).w
+		rts
+; ===========================================================================
+
+loc_67CA:
+		bset	#1,(v_bg1_scroll_flags).w
+
+locret_67D0:
+		rts
+; End of function ScrollBlock1
+
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+ScrollBlock2:
+		move.l	(v_bgscreenposx).w,d2
+		move.l	d2,d0
+		add.l	d4,d0
+		move.l	d0,(v_bgscreenposx).w
+		move.l	(v_bgscreenposy).w,d3
+		move.l	d3,d0
+		add.l	d5,d0
+		move.l	d0,(v_bgscreenposy).w
+		move.l	d0,d1
+		swap	d1
+		andi.w	#$10,d1
+		move.b	($FFFFF74D).w,d2
+		eor.b	d2,d1
+		bne.s	locret_6812
+		eori.b	#$10,($FFFFF74D).w
+		sub.l	d3,d0
+		bpl.s	loc_680C
+		bset	#0,(v_bg1_scroll_flags).w
+		rts
+; ===========================================================================
+
+loc_680C:
+		bset	#1,(v_bg1_scroll_flags).w
+
+locret_6812:
+		rts
+; End of function ScrollBlock2
+
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+ScrollBlock3:
+		move.w	(v_bgscreenposy).w,d3
+		move.w	d0,(v_bgscreenposy).w
+		move.w	d0,d1
+		andi.w	#$10,d1
+		move.b	($FFFFF74D).w,d2
+		eor.b	d2,d1
+		bne.s	locret_6842
+		eori.b	#$10,($FFFFF74D).w
+		sub.w	d3,d0
+		bpl.s	loc_683C
+		bset	#0,(v_bg1_scroll_flags).w
+		rts
+; ===========================================================================
+
+loc_683C:
+		bset	#1,(v_bg1_scroll_flags).w
+
+locret_6842:
+		rts
+; End of function ScrollBlock3
+
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+ScrollBlock4:
+		move.w	(v_bg2screenposx).w,d2
+		move.w	(v_bg2screenposy).w,d3
+		move.w	(v_scrshiftx).w,d0
+		ext.l	d0
+		asl.l	#7,d0
+		add.l	d0,(v_bg2screenposx).w
+		move.w	(v_bg2screenposx).w,d0
+		andi.w	#$10,d0
+		move.b	($FFFFF74E).w,d1
+		eor.b	d1,d0
+		bne.s	locret_6884
+		eori.b	#$10,($FFFFF74E).w
+		move.w	(v_bg2screenposx).w,d0
+		sub.w	d2,d0
+		bpl.s	loc_687E
+		bset	#2,(v_bg2_scroll_flags).w
+		bra.s	locret_6884
+; ===========================================================================
+
+loc_687E:
+		bset	#3,(v_bg2_scroll_flags).w
+
+locret_6884:
+		rts
+; End of function ScrollBlock4
+
+
 		else
-		include	"_inc\LevelSizeLoad & BgScrollSpeed (JP1).asm"
-		include	"_inc\DeformLayers (JP1).asm"
+
+; ---------------------------------------------------------------------------
+; Subroutine to	load level boundaries and start	locations
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+LevelSizeLoad:
+		moveq	#0,d0
+		move.b	d0,($FFFFF740).w
+		move.b	d0,($FFFFF741).w
+		move.b	d0,($FFFFF746).w
+		move.b	d0,($FFFFF748).w
+		move.b	d0,(v_dle_routine).w
+		move.w	(v_zone).w,d0
+		lsl.b	#6,d0
+		lsr.w	#4,d0
+		move.w	d0,d1
+		add.w	d0,d0
+		add.w	d1,d0
+		lea	LevelSizeArray(pc,d0.w),a0 ; load level	boundaries
+		move.w	(a0)+,d0
+		move.w	d0,($FFFFF730).w
+		move.l	(a0)+,d0
+		move.l	d0,(v_limitleft2).w
+		move.l	d0,(v_limitleft1).w
+		move.l	(a0)+,d0
+		move.l	d0,(v_limittop2).w
+		move.l	d0,(v_limittop1).w
+		move.w	(v_limitleft2).w,d0
+		addi.w	#$240,d0
+		move.w	d0,(v_limitleft3).w
+		move.w	#$1010,($FFFFF74A).w
+		move.w	(a0)+,d0
+		move.w	d0,(v_lookshift).w
+		bra.w	LevSz_ChkLamp
+; ===========================================================================
+; ---------------------------------------------------------------------------
+; Level size array
+; ---------------------------------------------------------------------------
+LevelSizeArray:
+		; GHZ
+		dc.w $0004, $0000, $24BF, $0000, $0300, $0060
+		dc.w $0004, $0000, $1EBF, $0000, $0300, $0060
+		dc.w $0004, $0000, $2960, $0000, $0300, $0060
+		dc.w $0004, $0000, $2ABF, $0000, $0300, $0060
+		; LZ
+		dc.w $0004, $0000, $19BF, $0000, $0530, $0060
+		dc.w $0004, $0000, $10AF, $0000, $0720, $0060
+		dc.w $0004, $0000, $202F, $FF00, $0800, $0060
+		dc.w $0004, $0000, $20BF, $0000, $0720, $0060
+		; MZ
+		dc.w $0004, $0000, $17BF, $0000, $01D0, $0060
+		dc.w $0004, $0000, $17BF, $0000, $0520, $0060
+		dc.w $0004, $0000, $1800, $0000, $0720, $0060
+		dc.w $0004, $0000, $16BF, $0000, $0720, $0060
+		; SLZ
+		dc.w $0004, $0000, $1FBF, $0000, $0640, $0060
+		dc.w $0004, $0000, $1FBF, $0000, $0640, $0060
+		dc.w $0004, $0000, $2000, $0000, $06C0, $0060
+		dc.w $0004, $0000, $3EC0, $0000, $0720, $0060
+		; SYZ
+		dc.w $0004, $0000, $22C0, $0000, $0420, $0060
+		dc.w $0004, $0000, $28C0, $0000, $0520, $0060
+		dc.w $0004, $0000, $2C00, $0000, $0620, $0060
+		dc.w $0004, $0000, $2EC0, $0000, $0620, $0060
+		; SBZ
+		dc.w $0004, $0000, $21C0, $0000, $0720, $0060
+		dc.w $0004, $0000, $1E40, $FF00, $0800, $0060
+		dc.w $0004, $2080, $2460, $0510, $0510, $0060
+		dc.w $0004, $0000, $3EC0, $0000, $0720, $0060
+		zonewarning LevelSizeArray,$30
+		; Ending
+		dc.w $0004, $0000, $0500, $0110, $0110, $0060
+		dc.w $0004, $0000, $0DC0, $0110, $0110, $0060
+		dc.w $0004, $0000, $2FFF, $0000, $0320, $0060
+		dc.w $0004, $0000, $2FFF, $0000, $0320, $0060
+
+; ---------------------------------------------------------------------------
+; Ending start location array
+; ---------------------------------------------------------------------------
+EndingStLocArray:
+		incbin	"startpos\ghz1 (Credits demo 1).bin"
+		incbin	"startpos\mz2 (Credits demo).bin"
+		incbin	"startpos\syz3 (Credits demo).bin"
+		incbin	"startpos\lz3 (Credits demo).bin"
+		incbin	"startpos\slz3 (Credits demo).bin"
+		incbin	"startpos\sbz1 (Credits demo).bin"
+		incbin	"startpos\sbz2 (Credits demo).bin"
+		incbin	"startpos\ghz1 (Credits demo 2).bin"
+		even
+
+
+; ===========================================================================
+
+LevSz_ChkLamp:
+		tst.b	(v_lastlamp).w	; have any lampposts been hit?
+		beq.s	LevSz_StartLoc	; if not, branch
+
+		jsr	(Lamp_LoadInfo).l
+		move.w	(v_player+obX).w,d1
+		move.w	(v_player+obY).w,d0
+		bra.s	LevSz_SkipStartPos
+; ===========================================================================
+
+LevSz_StartLoc:
+		move.w	(v_zone).w,d0
+		lsl.b	#6,d0
+		lsr.w	#4,d0
+		lea	StartLocArray(pc,d0.w),a1 ; load Sonic's start location
+		tst.w	(f_demo).w	; is ending demo mode on?
+		bpl.s	LevSz_SonicPos	; if not, branch
+
+		move.w	(v_creditsnum).w,d0
+		subq.w	#1,d0
+		lsl.w	#2,d0
+		lea	EndingStLocArray(pc,d0.w),a1 ; load Sonic's start location
+
+LevSz_SonicPos:
+		moveq	#0,d1
+		move.w	(a1)+,d1
+		move.w	d1,(v_player+obX).w ; set Sonic's position on x-axis
+		moveq	#0,d0
+		move.w	(a1),d0
+		move.w	d0,(v_player+obY).w ; set Sonic's position on y-axis
+
+SetScreen:
+	LevSz_SkipStartPos:
+		subi.w	#160,d1		; is Sonic more than 160px from left edge?
+		bcc.s	SetScr_WithinLeft ; if yes, branch
+		moveq	#0,d1
+
+	SetScr_WithinLeft:
+		move.w	(v_limitright2).w,d2
+		cmp.w	d2,d1		; is Sonic inside the right edge?
+		bcs.s	SetScr_WithinRight ; if yes, branch
+		move.w	d2,d1
+
+	SetScr_WithinRight:
+		move.w	d1,(v_screenposx).w ; set horizontal screen position
+
+		subi.w	#96,d0		; is Sonic within 96px of upper edge?
+		bcc.s	SetScr_WithinTop ; if yes, branch
+		moveq	#0,d0
+
+	SetScr_WithinTop:
+		cmp.w	(v_limitbtm2).w,d0 ; is Sonic above the bottom edge?
+		blt.s	SetScr_WithinBottom ; if yes, branch
+		move.w	(v_limitbtm2).w,d0
+
+	SetScr_WithinBottom:
+		move.w	d0,(v_screenposy).w ; set vertical screen position
+		bsr.w	BgScrollSpeed
+		moveq	#0,d0
+		move.b	(v_zone).w,d0
+		lsl.b	#2,d0
+		move.l	LoopTileNums(pc,d0.w),(v_256loop1).w
+		rts
+; ===========================================================================
+; ---------------------------------------------------------------------------
+; Sonic start location array
+; ---------------------------------------------------------------------------
+StartLocArray:
+		incbin	"startpos\ghz1.bin"
+		incbin	"startpos\ghz2.bin"
+		incbin	"startpos\ghz3.bin"
+		dc.w	$80,$A8
+
+		incbin	"startpos\lz1.bin"
+		incbin	"startpos\lz2.bin"
+		incbin	"startpos\lz3.bin"
+		incbin	"startpos\sbz3.bin"
+
+		incbin	"startpos\mz1.bin"
+		incbin	"startpos\mz2.bin"
+		incbin	"startpos\mz3.bin"
+		dc.w	$80,$A8
+
+		incbin	"startpos\slz1.bin"
+		incbin	"startpos\slz2.bin"
+		incbin	"startpos\slz3.bin"
+		dc.w	$80,$A8
+
+		incbin	"startpos\syz1.bin"
+		incbin	"startpos\syz2.bin"
+		incbin	"startpos\syz3.bin"
+		dc.w	$80,$A8
+
+		incbin	"startpos\sbz1.bin"
+		incbin	"startpos\sbz2.bin"
+		incbin	"startpos\fz.bin"
+		dc.w	$80,$A8
+
+		zonewarning StartLocArray,$10
+
+		incbin	"startpos\end1.bin"
+		incbin	"startpos\end2.bin"
+		dc.w	$80,$A8
+		dc.w	$80,$A8
+
+		even
+
+
+; ---------------------------------------------------------------------------
+; Which	256x256	tiles contain loops or roll-tunnels
+; ---------------------------------------------------------------------------
+
+LoopTileNums:
+
+; 		loop	loop	tunnel	tunnel
+
+	dc.b	$B5,	$7F,	$1F,	$20	; Green Hill
+	dc.b	$7F,	$7F,	$7F,	$7F	; Labyrinth
+	dc.b	$7F,	$7F,	$7F,	$7F	; Marble
+	dc.b	$AA,	$B4,	$7F,	$7F	; Star Light
+	dc.b	$7F,	$7F,	$7F,	$7F	; Spring Yard
+	dc.b	$7F,	$7F,	$7F,	$7F	; Scrap Brain
+	zonewarning LoopTileNums,4
+	dc.b	$7F,	$7F,	$7F,	$7F	; Ending (Green Hill)
+
+		even
+
+; ---------------------------------------------------------------------------
+; Subroutine to	set scroll speed of some backgrounds
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+BgScrollSpeed:
+		tst.b	(v_lastlamp).w
+		bne.s	loc_6206
+		move.w	d0,(v_bgscreenposy).w
+		move.w	d0,(v_bg2screenposy).w
+		move.w	d1,(v_bgscreenposx).w
+		move.w	d1,(v_bg2screenposx).w
+		move.w	d1,(v_bg3screenposx).w
+
+loc_6206:
+		moveq	#0,d2
+		move.b	(v_zone).w,d2
+		add.w	d2,d2
+		move.w	BgScroll_Index(pc,d2.w),d2
+		jmp	BgScroll_Index(pc,d2.w)
+; End of function BgScrollSpeed
+
+; ===========================================================================
+BgScroll_Index:	dc.w BgScroll_GHZ-BgScroll_Index, BgScroll_LZ-BgScroll_Index
+		dc.w BgScroll_MZ-BgScroll_Index, BgScroll_SLZ-BgScroll_Index
+		dc.w BgScroll_SYZ-BgScroll_Index, BgScroll_SBZ-BgScroll_Index
+		zonewarning BgScroll_Index,2
+		dc.w BgScroll_End-BgScroll_Index
+; ===========================================================================
+
+BgScroll_GHZ:
+		clr.l	(v_bgscreenposx).w
+		clr.l	(v_bgscreenposy).w
+		clr.l	(v_bg2screenposy).w
+		clr.l	(v_bg3screenposy).w
+		lea	($FFFFA800).w,a2
+		clr.l	(a2)+
+		clr.l	(a2)+
+		clr.l	(a2)+
+		rts
+; ===========================================================================
+
+BgScroll_LZ:
+		asr.l	#1,d0
+		move.w	d0,(v_bgscreenposy).w
+		rts
+; ===========================================================================
+
+BgScroll_MZ:
+		rts
+; ===========================================================================
+
+BgScroll_SLZ:
+		asr.l	#1,d0
+		addi.w	#$C0,d0
+		move.w	d0,(v_bgscreenposy).w
+		clr.l	(v_bgscreenposx).w
+		rts
+; ===========================================================================
+
+BgScroll_SYZ:
+		asl.l	#4,d0
+		move.l	d0,d2
+		asl.l	#1,d0
+		add.l	d2,d0
+		asr.l	#8,d0
+		addq.w	#1,d0
+		move.w	d0,(v_bgscreenposy).w
+		clr.l	(v_bgscreenposx).w
+		rts
+; ===========================================================================
+
+BgScroll_SBZ:
+		andi.w	#$7F8,d0
+		asr.w	#3,d0
+		addq.w	#1,d0
+		move.w	d0,(v_bgscreenposy).w
+		rts
+; ===========================================================================
+
+BgScroll_End:
+		move.w	(v_screenposx).w,d0
+		asr.w	#1,d0
+		move.w	d0,(v_bgscreenposx).w
+		move.w	d0,(v_bg2screenposx).w
+		asr.w	#2,d0
+		move.w	d0,d1
+		add.w	d0,d0
+		add.w	d1,d0
+		move.w	d0,(v_bg3screenposx).w
+		clr.l	(v_bgscreenposy).w
+		clr.l	(v_bg2screenposy).w
+		clr.l	(v_bg3screenposy).w
+		lea	($FFFFA800).w,a2
+		clr.l	(a2)+
+		clr.l	(a2)+
+		clr.l	(a2)+
+		rts
+
+
+
+; ---------------------------------------------------------------------------
+; Background layer deformation subroutines
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+DeformLayers:
+		tst.b	(f_nobgscroll).w
+		beq.s	@bgscroll
+		rts
+; ===========================================================================
+
+	@bgscroll:
+		clr.w	(v_fg_scroll_flags).w
+		clr.w	(v_bg1_scroll_flags).w
+		clr.w	(v_bg2_scroll_flags).w
+		clr.w	(v_bg3_scroll_flags).w
+		bsr.w	ScrollHoriz
+		bsr.w	ScrollVertical
+		bsr.w	DynamicLevelEvents
+		move.w	(v_screenposy).w,(v_scrposy_vdp).w
+		move.w	(v_bgscreenposy).w,(v_bgscrposy_vdp).w
+		moveq	#0,d0
+		move.b	(v_zone).w,d0
+		add.w	d0,d0
+		move.w	Deform_Index(pc,d0.w),d0
+		jmp	Deform_Index(pc,d0.w)
+; End of function DeformLayers
+
+; ===========================================================================
+; ---------------------------------------------------------------------------
+; Offset index for background layer deformation	code
+; ---------------------------------------------------------------------------
+Deform_Index:	dc.w Deform_GHZ-Deform_Index, Deform_LZ-Deform_Index
+		dc.w Deform_MZ-Deform_Index, Deform_SLZ-Deform_Index
+		dc.w Deform_SYZ-Deform_Index, Deform_SBZ-Deform_Index
+		zonewarning Deform_Index,2
+		dc.w Deform_GHZ-Deform_Index
+; ---------------------------------------------------------------------------
+; Green	Hill Zone background layer deformation code
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+Deform_GHZ:
+	; block 3 - distant mountains
+		move.w	(v_scrshiftx).w,d4
+		ext.l	d4
+		asl.l	#5,d4
+		move.l	d4,d1
+		asl.l	#1,d4
+		add.l	d1,d4
+		moveq	#0,d6
+		bsr.w	BGScroll_Block3
+	; block 2 - hills & waterfalls
+		move.w	(v_scrshiftx).w,d4
+		ext.l	d4
+		asl.l	#7,d4
+		moveq	#0,d6
+		bsr.w	BGScroll_Block2
+	; calculate Y position
+		lea	(v_hscrolltablebuffer).w,a1
+		move.w	(v_screenposy).w,d0
+		andi.w	#$7FF,d0
+		lsr.w	#5,d0
+		neg.w	d0
+		addi.w	#$20,d0
+		bpl.s	@limitY
+		moveq	#0,d0
+	@limitY:
+		move.w	d0,d4
+		move.w	d0,(v_bgscrposy_vdp).w
+		move.w	(v_screenposx).w,d0
+		cmpi.b	#id_Title,(v_gamemode).w
+		bne.s	@notTitle
+		moveq	#0,d0	; reset foreground position in title screen
+	@notTitle:
+		neg.w	d0
+		swap	d0
+	; auto-scroll clouds
+		lea	(v_bgscroll_buffer).w,a2
+		addi.l	#$10000,(a2)+
+		addi.l	#$C000,(a2)+
+		addi.l	#$8000,(a2)+
+	; calculate background scroll
+		move.w	(v_bgscroll_buffer).w,d0
+		add.w	(v_bg3screenposx).w,d0
+		neg.w	d0
+		move.w	#$1F,d1
+		sub.w	d4,d1
+		bcs.s	@gotoCloud2
+	@cloudLoop1:		; upper cloud (32px)
+		move.l	d0,(a1)+
+		dbf	d1,@cloudLoop1
+
+	@gotoCloud2:
+		move.w	(v_bgscroll_buffer+4).w,d0
+		add.w	(v_bg3screenposx).w,d0
+		neg.w	d0
+		move.w	#$F,d1
+	@cloudLoop2:		; middle cloud (16px)
+		move.l	d0,(a1)+
+		dbf	d1,@cloudLoop2
+
+		move.w	(v_bgscroll_buffer+8).w,d0
+		add.w	(v_bg3screenposx).w,d0
+		neg.w	d0
+		move.w	#$F,d1
+	@cloudLoop3:		; lower cloud (16px)
+		move.l	d0,(a1)+
+		dbf	d1,@cloudLoop3
+
+		move.w	#$2F,d1
+		move.w	(v_bg3screenposx).w,d0
+		neg.w	d0
+	@mountainLoop:		; distant mountains (48px)
+		move.l	d0,(a1)+
+		dbf	d1,@mountainLoop
+
+		move.w	#$27,d1
+		move.w	(v_bg2screenposx).w,d0
+		neg.w	d0
+	@hillLoop:			; hills & waterfalls (40px)
+		move.l	d0,(a1)+
+		dbf	d1,@hillLoop
+
+		move.w	(v_bg2screenposx).w,d0
+		move.w	(v_screenposx).w,d2
+		sub.w	d0,d2
+		ext.l	d2
+		asl.l	#8,d2
+		divs.w	#$68,d2
+		ext.l	d2
+		asl.l	#8,d2
+		moveq	#0,d3
+		move.w	d0,d3
+		move.w	#$47,d1
+		add.w	d4,d1
+	@waterLoop:			; water deformation
+		move.w	d3,d0
+		neg.w	d0
+		move.l	d0,(a1)+
+		swap	d3
+		add.l	d2,d3
+		swap	d3
+		dbf	d1,@waterLoop
+		rts
+; End of function Deform_GHZ
+
+; ---------------------------------------------------------------------------
+; Labyrinth Zone background layer deformation code
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+Deform_LZ:
+	; plain background scroll
+		move.w	(v_scrshiftx).w,d4
+		ext.l	d4
+		asl.l	#7,d4
+		move.w	(v_scrshifty).w,d5
+		ext.l	d5
+		asl.l	#7,d5
+		bsr.w	BGScroll_XY
+
+		move.w	(v_bgscreenposy).w,(v_bgscrposy_vdp).w
+		lea	(Lz_Scroll_Data).l,a3
+		lea	(Drown_WobbleData).l,a2
+		move.b	(v_lz_deform).w,d2
+		move.b	d2,d3
+		addi.w	#$80,(v_lz_deform).w
+
+		add.w	(v_bgscreenposy).w,d2
+		andi.w	#$FF,d2
+		add.w	(v_screenposy).w,d3
+		andi.w	#$FF,d3
+		lea	(v_hscrolltablebuffer).w,a1
+		move.w	#$DF,d1
+		move.w	(v_screenposx).w,d0
+		neg.w	d0
+		move.w	d0,d6
+		swap	d0
+		move.w	(v_bgscreenposx).w,d0
+		neg.w	d0
+		move.w	(v_waterpos1).w,d4
+		move.w	(v_screenposy).w,d5
+	; write normal scroll before meeting water position
+	@normalLoop:
+		cmp.w	d4,d5	; is current y >= water y?
+		bge.s	@underwaterLoop	; if yes, branch
+		move.l	d0,(a1)+
+		addq.w	#1,d5
+		addq.b	#1,d2
+		addq.b	#1,d3
+		dbf	d1,@normalLoop
+		rts
+	; apply water deformation when underwater
+	@underwaterLoop:
+		move.b	(a3,d3.w),d4
+		ext.w	d4
+		add.w	d6,d4
+		move.w	d4,(a1)+
+		move.b	(a2,d2.w),d4
+		ext.w	d4
+		add.w	d0,d4
+		move.w	d4,(a1)+
+		addq.b	#1,d2
+		addq.b	#1,d3
+		dbf	d1,@underwaterLoop
+		rts
+
+Lz_Scroll_Data:
+		dc.b $01,$01,$02,$02,$03,$03,$03,$03,$02,$02,$01,$01,$00,$00,$00,$00
+		dc.b $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
+		dc.b $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
+		dc.b $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
+		dc.b $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
+		dc.b $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
+		dc.b $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
+		dc.b $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
+		dc.b $FF,$FF,$FE,$FE,$FD,$FD,$FD,$FD,$FE,$FE,$FF,$FF,$00,$00,$00,$00
+		dc.b $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
+		dc.b $01,$01,$02,$02,$03,$03,$03,$03,$02,$02,$01,$01,$00,$00,$00,$00
+		dc.b $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
+		dc.b $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
+		dc.b $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
+		dc.b $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
+		dc.b $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
+; End of function Deform_LZ
+
+; ---------------------------------------------------------------------------
+; Marble Zone background layer deformation code
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+Deform_MZ:
+	; block 1 - dungeon interior
+		move.w	(v_scrshiftx).w,d4
+		ext.l	d4
+		asl.l	#6,d4
+		move.l	d4,d1
+		asl.l	#1,d4
+		add.l	d1,d4
+		moveq	#2,d6
+		bsr.w	BGScroll_Block1
+	; block 3 - mountains
+		move.w	(v_scrshiftx).w,d4
+		ext.l	d4
+		asl.l	#6,d4
+		moveq	#6,d6
+		bsr.w	BGScroll_Block3
+	; block 2 - bushes & antique buildings
+		move.w	(v_scrshiftx).w,d4
+		ext.l	d4
+		asl.l	#7,d4
+		moveq	#4,d6
+		bsr.w	BGScroll_Block2
+	; calculate y-position of background
+		move.w	#$200,d0	; start with 512px, ignoring 2 chunks
+		move.w	(v_screenposy).w,d1
+		subi.w	#$1C8,d1	; 0% scrolling when y <= 56px
+		bcs.s	@noYscroll
+		move.w	d1,d2
+		add.w	d1,d1
+		add.w	d2,d1
+		asr.w	#2,d1
+		add.w	d1,d0
+	@noYscroll:
+		move.w	d0,(v_bg2screenposy).w
+		move.w	d0,(v_bg3screenposy).w
+		bsr.w	BGScroll_YAbsolute
+		move.w	(v_bgscreenposy).w,(v_bgscrposy_vdp).w
+	; do something with redraw flags
+		move.b	(v_bg1_scroll_flags).w,d0
+		or.b	(v_bg2_scroll_flags).w,d0
+		or.b	d0,(v_bg3_scroll_flags).w
+		clr.b	(v_bg1_scroll_flags).w
+		clr.b	(v_bg2_scroll_flags).w
+	; calculate background scroll buffer
+		lea	(v_bgscroll_buffer).w,a1
+		move.w	(v_screenposx).w,d2
+		neg.w	d2
+		move.w	d2,d0
+		asr.w	#2,d0
+		sub.w	d2,d0
+		ext.l	d0
+		asl.l	#3,d0
+		divs.w	#5,d0
+		ext.l	d0
+		asl.l	#4,d0
+		asl.l	#8,d0
+		moveq	#0,d3
+		move.w	d2,d3
+		asr.w	#1,d3
+		move.w	#4,d1
+	@cloudLoop:
+		move.w	d3,(a1)+
+		swap	d3
+		add.l	d0,d3
+		swap	d3
+		dbf	d1,@cloudLoop
+
+		move.w	(v_bg3screenposx).w,d0
+		neg.w	d0
+		move.w	#1,d1
+	@mountainLoop:
+		move.w	d0,(a1)+
+		dbf	d1,@mountainLoop
+
+		move.w	(v_bg2screenposx).w,d0
+		neg.w	d0
+		move.w	#8,d1
+	@bushLoop:
+		move.w	d0,(a1)+
+		dbf	d1,@bushLoop
+
+		move.w	(v_bgscreenposx).w,d0
+		neg.w	d0
+		move.w	#$F,d1
+	@interiorLoop:
+		move.w	d0,(a1)+
+		dbf	d1,@interiorLoop
+
+		lea	(v_bgscroll_buffer).w,a2
+		move.w	(v_bgscreenposy).w,d0
+		subi.w	#$200,d0	; subtract 512px (unused 2 chunks)
+		move.w	d0,d2
+		cmpi.w	#$100,d0
+		bcs.s	@limitY
+		move.w	#$100,d0
+	@limitY:
+		andi.w	#$1F0,d0
+		lsr.w	#3,d0
+		lea	(a2,d0.w),a2
+		bra.w	Bg_Scroll_X
+; End of function Deform_MZ
+
+; ---------------------------------------------------------------------------
+; Star Light Zone background layer deformation code
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+Deform_SLZ:
+	; vertical scrolling
+		move.w	(v_scrshifty).w,d5
+		ext.l	d5
+		asl.l	#7,d5
+		bsr.w	Bg_Scroll_Y
+		move.w	(v_bgscreenposy).w,(v_bgscrposy_vdp).w
+	; calculate background scroll buffer
+		lea	(v_bgscroll_buffer).w,a1
+		move.w	(v_screenposx).w,d2
+		neg.w	d2
+		move.w	d2,d0
+		asr.w	#3,d0
+		sub.w	d2,d0
+		ext.l	d0
+		asl.l	#4,d0
+		divs.w	#$1C,d0
+		ext.l	d0
+		asl.l	#4,d0
+		asl.l	#8,d0
+		moveq	#0,d3
+		move.w	d2,d3
+		move.w	#$1B,d1
+	@starLoop:
+		move.w	d3,(a1)+
+		swap	d3
+		add.l	d0,d3
+		swap	d3
+		dbf	d1,@starLoop
+
+		move.w	d2,d0
+		asr.w	#3,d0
+		move.w	d0,d1
+		asr.w	#1,d1
+		add.w	d1,d0
+		move.w	#4,d1
+	@buildingLoop1:		; distant black buildings
+		move.w	d0,(a1)+
+		dbf	d1,@buildingLoop1
+
+		move.w	d2,d0
+		asr.w	#2,d0
+		move.w	#4,d1
+	@buildingLoop2:		; closer buildings
+		move.w	d0,(a1)+
+		dbf	d1,@buildingLoop2
+
+		move.w	d2,d0
+		asr.w	#1,d0
+		move.w	#$1D,d1
+	@bottomLoop:		; bottom part of background
+		move.w	d0,(a1)+
+		dbf	d1,@bottomLoop
+
+		lea	(v_bgscroll_buffer).w,a2
+		move.w	(v_bgscreenposy).w,d0
+		move.w	d0,d2
+		subi.w	#$C0,d0
+		andi.w	#$3F0,d0
+		lsr.w	#3,d0
+		lea	(a2,d0.w),a2
+;-------------------------------------------------------------------------------
+;-------------------------------------------------------------------------------
+Bg_Scroll_X:
+		lea	(v_hscrolltablebuffer).w,a1
+		move.w	#$E,d1
+		move.w	(v_screenposx).w,d0
+		neg.w	d0
+		swap	d0
+		andi.w	#$F,d2
+		add.w	d2,d2
+		move.w	(a2)+,d0
+		jmp	@pixelJump(pc,d2.w)		; skip pixels for first row
+	@blockLoop:
+		move.w	(a2)+,d0
+	@pixelJump:
+		move.l	d0,(a1)+
+		move.l	d0,(a1)+
+		move.l	d0,(a1)+
+		move.l	d0,(a1)+
+		move.l	d0,(a1)+
+		move.l	d0,(a1)+
+		move.l	d0,(a1)+
+		move.l	d0,(a1)+
+		move.l	d0,(a1)+
+		move.l	d0,(a1)+
+		move.l	d0,(a1)+
+		move.l	d0,(a1)+
+		move.l	d0,(a1)+
+		move.l	d0,(a1)+
+		move.l	d0,(a1)+
+		move.l	d0,(a1)+
+		dbf	d1,@blockLoop
+		rts
+
+; ---------------------------------------------------------------------------
+; Spring Yard Zone background layer deformation	code
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+Deform_SYZ:
+	; vertical scrolling
+		move.w	(v_scrshifty).w,d5
+		ext.l	d5
+		asl.l	#4,d5
+		move.l	d5,d1
+		asl.l	#1,d5
+		add.l	d1,d5
+		bsr.w	Bg_Scroll_Y
+		move.w	(v_bgscreenposy).w,(v_bgscrposy_vdp).w
+	; calculate background scroll buffer
+		lea	(v_bgscroll_buffer).w,a1
+		move.w	(v_screenposx).w,d2
+		neg.w	d2
+		move.w	d2,d0
+		asr.w	#3,d0
+		sub.w	d2,d0
+		ext.l	d0
+		asl.l	#3,d0
+		divs.w	#8,d0
+		ext.l	d0
+		asl.l	#4,d0
+		asl.l	#8,d0
+		moveq	#0,d3
+		move.w	d2,d3
+		asr.w	#1,d3
+		move.w	#7,d1
+	@cloudLoop:
+		move.w	d3,(a1)+
+		swap	d3
+		add.l	d0,d3
+		swap	d3
+		dbf	d1,@cloudLoop
+
+		move.w	d2,d0
+		asr.w	#3,d0
+		move.w	#4,d1
+	@mountainLoop:
+		move.w	d0,(a1)+
+		dbf	d1,@mountainLoop
+
+		move.w	d2,d0
+		asr.w	#2,d0
+		move.w	#5,d1
+	@buildingLoop:
+		move.w	d0,(a1)+
+		dbf	d1,@buildingLoop
+
+		move.w	d2,d0
+		move.w	d2,d1
+		asr.w	#1,d1
+		sub.w	d1,d0
+		ext.l	d0
+		asl.l	#4,d0
+		divs.w	#$E,d0
+		ext.l	d0
+		asl.l	#4,d0
+		asl.l	#8,d0
+		moveq	#0,d3
+		move.w	d2,d3
+		asr.w	#1,d3
+		move.w	#$D,d1
+	@bushLoop:
+		move.w	d3,(a1)+
+		swap	d3
+		add.l	d0,d3
+		swap	d3
+		dbf	d1,@bushLoop
+
+		lea	(v_bgscroll_buffer).w,a2
+		move.w	(v_bgscreenposy).w,d0
+		move.w	d0,d2
+		andi.w	#$1F0,d0
+		lsr.w	#3,d0
+		lea	(a2,d0.w),a2
+		bra.w	Bg_Scroll_X
+; End of function Deform_SYZ
+
+; ---------------------------------------------------------------------------
+; Scrap	Brain Zone background layer deformation	code
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+Deform_SBZ:
+		tst.b	(v_act).w
+		bne.w	Deform_SBZ2
+	; block 1 - lower black buildings
+		move.w	(v_scrshiftx).w,d4
+		ext.l	d4
+		asl.l	#7,d4
+		moveq	#2,d6
+		bsr.w	BGScroll_Block1
+	; block 3 - distant brown buildings
+		move.w	(v_scrshiftx).w,d4
+		ext.l	d4
+		asl.l	#6,d4
+		moveq	#6,d6
+		bsr.w	BGScroll_Block3
+	; block 2 - upper black buildings
+		move.w	(v_scrshiftx).w,d4
+		ext.l	d4
+		asl.l	#5,d4
+		move.l	d4,d1
+		asl.l	#1,d4
+		add.l	d1,d4
+		moveq	#4,d6
+		bsr.w	BGScroll_Block2
+	; vertical scrolling
+		moveq	#0,d4
+		move.w	(v_scrshifty).w,d5
+		ext.l	d5
+		asl.l	#5,d5
+		bsr.w	BGScroll_YRelative
+
+		move.w	(v_bgscreenposy).w,d0
+		move.w	d0,(v_bg2screenposy).w
+		move.w	d0,(v_bg3screenposy).w
+		move.w	d0,(v_bgscrposy_vdp).w
+		move.b	(v_bg1_scroll_flags).w,d0
+		or.b	(v_bg3_scroll_flags).w,d0
+		or.b	d0,(v_bg2_scroll_flags).w
+		clr.b	(v_bg1_scroll_flags).w
+		clr.b	(v_bg3_scroll_flags).w
+	; calculate background scroll buffer
+		lea	(v_bgscroll_buffer).w,a1
+		move.w	(v_screenposx).w,d2
+		neg.w	d2
+		asr.w	#2,d2
+		move.w	d2,d0
+		asr.w	#1,d0
+		sub.w	d2,d0
+		ext.l	d0
+		asl.l	#3,d0
+		divs.w	#4,d0
+		ext.l	d0
+		asl.l	#4,d0
+		asl.l	#8,d0
+		moveq	#0,d3
+		move.w	d2,d3
+		move.w	#3,d1
+	@cloudLoop:
+		move.w	d3,(a1)+
+		swap	d3
+		add.l	d0,d3
+		swap	d3
+		dbf	d1,@cloudLoop
+
+		move.w	(v_bg3screenposx).w,d0
+		neg.w	d0
+		move.w	#9,d1
+	@buildingLoop1:		; distant brown buildings
+		move.w	d0,(a1)+
+		dbf	d1,@buildingLoop1
+
+		move.w	(v_bg2screenposx).w,d0
+		neg.w	d0
+		move.w	#6,d1
+	@buildingLoop2:		; upper black buildings
+		move.w	d0,(a1)+
+		dbf	d1,@buildingLoop2
+
+		move.w	(v_bgscreenposx).w,d0
+		neg.w	d0
+		move.w	#$A,d1
+	@buildingLoop3:		; lower black buildings
+		move.w	d0,(a1)+
+		dbf	d1,@buildingLoop3
+		lea	(v_bgscroll_buffer).w,a2
+		move.w	(v_bgscreenposy).w,d0
+		move.w	d0,d2
+		andi.w	#$1F0,d0
+		lsr.w	#3,d0
+		lea	(a2,d0.w),a2
+		bra.w	Bg_Scroll_X
+;-------------------------------------------------------------------------------
+Deform_SBZ2:;loc_68A2:
+	; plain background deformation
+		move.w	(v_scrshiftx).w,d4
+		ext.l	d4
+		asl.l	#6,d4
+		move.w	(v_scrshifty).w,d5
+		ext.l	d5
+		asl.l	#5,d5
+		bsr.w	BGScroll_XY
+		move.w	(v_bgscreenposy).w,(v_bgscrposy_vdp).w
+	; copy fg & bg x-position to hscroll table
+		lea	(v_hscrolltablebuffer).w,a1
+		move.w	#223,d1
+		move.w	(v_screenposx).w,d0
+		neg.w	d0
+		swap	d0
+		move.w	(v_bgscreenposx).w,d0
+		neg.w	d0
+	@loop:
+		move.l	d0,(a1)+
+		dbf	d1,@loop
+		rts
+; End of function Deform_SBZ
+
+; ---------------------------------------------------------------------------
+; Subroutine to	scroll the level horizontally as Sonic moves
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+ScrollHoriz:
+		move.w	(v_screenposx).w,d4 ; save old screen position
+		bsr.s	MoveScreenHoriz
+		move.w	(v_screenposx).w,d0
+		andi.w	#$10,d0
+		move.b	(v_fg_xblock).w,d1
+		eor.b	d1,d0
+		bne.s	@return
+		eori.b	#$10,(v_fg_xblock).w
+		move.w	(v_screenposx).w,d0
+		sub.w	d4,d0		; compare new with old screen position
+		bpl.s	@scrollRight
+
+		bset	#2,(v_fg_scroll_flags).w ; screen moves backward
+		rts
+
+	@scrollRight:
+		bset	#3,(v_fg_scroll_flags).w ; screen moves forward
+
+	@return:
+		rts
+; End of function ScrollHoriz
+
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+MoveScreenHoriz:
+		move.w	(v_player+obX).w,d0
+		sub.w	(v_screenposx).w,d0 ; Sonic's distance from left edge of screen
+		subi.w	#144,d0		; is distance less than 144px?
+		bcs.s	SH_BehindMid	; if yes, branch
+		subi.w	#16,d0		; is distance more than 160px?
+		bcc.s	SH_AheadOfMid	; if yes, branch
+		clr.w	(v_scrshiftx).w
+		rts
+; ===========================================================================
+
+SH_AheadOfMid:
+		cmpi.w	#16,d0		; is Sonic within 16px of middle area?
+		bcs.s	SH_Ahead16	; if yes, branch
+		move.w	#16,d0		; set to 16 if greater
+
+	SH_Ahead16:
+		add.w	(v_screenposx).w,d0
+		cmp.w	(v_limitright2).w,d0
+		blt.s	SH_SetScreen
+		move.w	(v_limitright2).w,d0
+
+SH_SetScreen:
+		move.w	d0,d1
+		sub.w	(v_screenposx).w,d1
+		asl.w	#8,d1
+		move.w	d0,(v_screenposx).w ; set new screen position
+		move.w	d1,(v_scrshiftx).w ; set distance for screen movement
+		rts
+; ===========================================================================
+
+SH_BehindMid:
+		add.w	(v_screenposx).w,d0
+		cmp.w	(v_limitleft2).w,d0
+		bgt.s	SH_SetScreen
+		move.w	(v_limitleft2).w,d0
+		bra.s	SH_SetScreen
+; End of function MoveScreenHoriz
+
+; ===========================================================================
+		tst.w	d0
+		bpl.s	loc_6610
+		move.w	#-2,d0
+		bra.s	SH_BehindMid
+
+loc_6610:
+		move.w	#2,d0
+		bra.s	SH_AheadOfMid
+
+; ---------------------------------------------------------------------------
+; Subroutine to	scroll the level vertically as Sonic moves
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+ScrollVertical:
+		moveq	#0,d1
+		move.w	(v_player+obY).w,d0
+		sub.w	(v_screenposy).w,d0 ; Sonic's distance from top of screen
+		btst	#2,(v_player+obStatus).w ; is Sonic rolling?
+		beq.s	SV_NotRolling	; if not, branch
+		subq.w	#5,d0
+
+	SV_NotRolling:
+		btst	#1,(v_player+obStatus).w ; is Sonic jumping?
+		beq.s	loc_664A	; if not, branch
+
+		addi.w	#32,d0
+		sub.w	(v_lookshift).w,d0
+		bcs.s	loc_6696
+		subi.w	#64,d0
+		bcc.s	loc_6696
+		tst.b	(f_bgscrollvert).w
+		bne.s	loc_66A8
+		bra.s	loc_6656
+; ===========================================================================
+
+loc_664A:
+		sub.w	(v_lookshift).w,d0
+		bne.s	loc_665C
+		tst.b	(f_bgscrollvert).w
+		bne.s	loc_66A8
+
+loc_6656:
+		clr.w	(v_scrshifty).w
+		rts
+; ===========================================================================
+
+loc_665C:
+		cmpi.w	#$60,(v_lookshift).w
+		bne.s	loc_6684
+		move.w	(v_player+obInertia).w,d1
+		bpl.s	loc_666C
+		neg.w	d1
+
+loc_666C:
+		cmpi.w	#$800,d1
+		bcc.s	loc_6696
+		move.w	#$600,d1
+		cmpi.w	#6,d0
+		bgt.s	loc_66F6
+		cmpi.w	#-6,d0
+		blt.s	loc_66C0
+		bra.s	loc_66AE
+; ===========================================================================
+
+loc_6684:
+		move.w	#$200,d1
+		cmpi.w	#2,d0
+		bgt.s	loc_66F6
+		cmpi.w	#-2,d0
+		blt.s	loc_66C0
+		bra.s	loc_66AE
+; ===========================================================================
+
+loc_6696:
+		move.w	#$1000,d1
+		cmpi.w	#$10,d0
+		bgt.s	loc_66F6
+		cmpi.w	#-$10,d0
+		blt.s	loc_66C0
+		bra.s	loc_66AE
+; ===========================================================================
+
+loc_66A8:
+		moveq	#0,d0
+		move.b	d0,(f_bgscrollvert).w
+
+loc_66AE:
+		moveq	#0,d1
+		move.w	d0,d1
+		add.w	(v_screenposy).w,d1
+		tst.w	d0
+		bpl.w	loc_6700
+		bra.w	loc_66CC
+; ===========================================================================
+
+loc_66C0:
+		neg.w	d1
+		ext.l	d1
+		asl.l	#8,d1
+		add.l	(v_screenposy).w,d1
+		swap	d1
+
+loc_66CC:
+		cmp.w	(v_limittop2).w,d1
+		bgt.s	loc_6724
+		cmpi.w	#-$100,d1
+		bgt.s	loc_66F0
+		andi.w	#$7FF,d1
+		andi.w	#$7FF,(v_player+obY).w
+		andi.w	#$7FF,(v_screenposy).w
+		andi.w	#$3FF,(v_bgscreenposy).w
+		bra.s	loc_6724
+; ===========================================================================
+
+loc_66F0:
+		move.w	(v_limittop2).w,d1
+		bra.s	loc_6724
+; ===========================================================================
+
+loc_66F6:
+		ext.l	d1
+		asl.l	#8,d1
+		add.l	(v_screenposy).w,d1
+		swap	d1
+
+loc_6700:
+		cmp.w	(v_limitbtm2).w,d1
+		blt.s	loc_6724
+		subi.w	#$800,d1
+		bcs.s	loc_6720
+		andi.w	#$7FF,(v_player+obY).w
+		subi.w	#$800,(v_screenposy).w
+		andi.w	#$3FF,(v_bgscreenposy).w
+		bra.s	loc_6724
+; ===========================================================================
+
+loc_6720:
+		move.w	(v_limitbtm2).w,d1
+
+loc_6724:
+		move.w	(v_screenposy).w,d4
+		swap	d1
+		move.l	d1,d3
+		sub.l	(v_screenposy).w,d3
+		ror.l	#8,d3
+		move.w	d3,(v_scrshifty).w
+		move.l	d1,(v_screenposy).w
+		move.w	(v_screenposy).w,d0
+		andi.w	#$10,d0
+		move.b	(v_fg_yblock).w,d1
+		eor.b	d1,d0
+		bne.s	@return
+		eori.b	#$10,(v_fg_yblock).w
+		move.w	(v_screenposy).w,d0
+		sub.w	d4,d0
+		bpl.s	@scrollBottom
+		bset	#0,(v_fg_scroll_flags).w
+		rts
+; ===========================================================================
+
+	@scrollBottom:
+		bset	#1,(v_fg_scroll_flags).w
+
+	@return:
+		rts
+; End of function ScrollVertical
+
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+; Scrolls background and sets redraw flags.
+; d4 - background x offset * $10000
+; d5 - background y offset * $10000
+
+BGScroll_XY:
+		move.l	(v_bgscreenposx).w,d2
+		move.l	d2,d0
+		add.l	d4,d0
+		move.l	d0,(v_bgscreenposx).w
+		move.l	d0,d1
+		swap	d1
+		andi.w	#$10,d1
+		move.b	(v_bg1_xblock).w,d3
+		eor.b	d3,d1
+		bne.s	BGScroll_YRelative	; no change in Y
+		eori.b	#$10,(v_bg1_xblock).w
+		sub.l	d2,d0	; new - old
+		bpl.s	@scrollRight
+		bset	#2,(v_bg1_scroll_flags).w
+		bra.s	BGScroll_YRelative
+	@scrollRight:
+		bset	#3,(v_bg1_scroll_flags).w
+BGScroll_YRelative:
+		move.l	(v_bgscreenposy).w,d3
+		move.l	d3,d0
+		add.l	d5,d0
+		move.l	d0,(v_bgscreenposy).w
+		move.l	d0,d1
+		swap	d1
+		andi.w	#$10,d1
+		move.b	(v_bg1_yblock).w,d2
+		eor.b	d2,d1
+		bne.s	@return
+		eori.b	#$10,(v_bg1_yblock).w
+		sub.l	d3,d0
+		bpl.s	@scrollBottom
+		bset	#0,(v_bg1_scroll_flags).w
+		rts
+	@scrollBottom:
+		bset	#1,(v_bg1_scroll_flags).w
+	@return:
+		rts
+; End of function BGScroll_XY
+
+Bg_Scroll_Y:
+		move.l	(v_bgscreenposy).w,d3
+		move.l	d3,d0
+		add.l	d5,d0
+		move.l	d0,(v_bgscreenposy).w
+		move.l	d0,d1
+		swap	d1
+		andi.w	#$10,d1
+		move.b	(v_bg1_yblock).w,d2
+		eor.b	d2,d1
+		bne.s	@return
+		eori.b	#$10,(v_bg1_yblock).w
+		sub.l	d3,d0
+		bpl.s	@scrollBottom
+		bset	#4,(v_bg1_scroll_flags).w
+		rts
+	@scrollBottom:
+		bset	#5,(v_bg1_scroll_flags).w
+	@return:
+		rts
+
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+BGScroll_YAbsolute:
+		move.w	(v_bgscreenposy).w,d3
+		move.w	d0,(v_bgscreenposy).w
+		move.w	d0,d1
+		andi.w	#$10,d1
+		move.b	(v_bg1_yblock).w,d2
+		eor.b	d2,d1
+		bne.s	@return
+		eori.b	#$10,(v_bg1_yblock).w
+		sub.w	d3,d0
+		bpl.s	@scrollBottom
+		bset	#0,(v_bg1_scroll_flags).w
+		rts
+	@scrollBottom:
+		bset	#1,(v_bg1_scroll_flags).w
+	@return:
+		rts
+; End of function BGScroll_YAbsolute
+
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+; d6 - bit to set for redraw
+
+BGScroll_Block1:
+		move.l	(v_bgscreenposx).w,d2
+		move.l	d2,d0
+		add.l	d4,d0
+		move.l	d0,(v_bgscreenposx).w
+		move.l	d0,d1
+		swap	d1
+		andi.w	#$10,d1
+		move.b	(v_bg1_xblock).w,d3
+		eor.b	d3,d1
+		bne.s	@return
+		eori.b	#$10,(v_bg1_xblock).w
+		sub.l	d2,d0
+		bpl.s	@scrollRight
+		bset	d6,(v_bg1_scroll_flags).w
+		bra.s	@return
+	@scrollRight:
+		addq.b	#1,d6
+		bset	d6,(v_bg1_scroll_flags).w
+	@return:
+		rts
+; End of function BGScroll_Block1
+
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+BGScroll_Block2:
+		move.l	(v_bg2screenposx).w,d2
+		move.l	d2,d0
+		add.l	d4,d0
+		move.l	d0,(v_bg2screenposx).w
+		move.l	d0,d1
+		swap	d1
+		andi.w	#$10,d1
+		move.b	(v_bg2_xblock).w,d3
+		eor.b	d3,d1
+		bne.s	@return
+		eori.b	#$10,(v_bg2_xblock).w
+		sub.l	d2,d0
+		bpl.s	@scrollRight
+		bset	d6,(v_bg2_scroll_flags).w
+		bra.s	@return
+	@scrollRight:
+		addq.b	#1,d6
+		bset	d6,(v_bg2_scroll_flags).w
+	@return:
+		rts
+;-------------------------------------------------------------------------------
+BGScroll_Block3:
+		move.l	(v_bg3screenposx).w,d2
+		move.l	d2,d0
+		add.l	d4,d0
+		move.l	d0,(v_bg3screenposx).w
+		move.l	d0,d1
+		swap	d1
+		andi.w	#$10,d1
+		move.b	(v_bg3_xblock).w,d3
+		eor.b	d3,d1
+		bne.s	@return
+		eori.b	#$10,(v_bg3_xblock).w
+		sub.l	d2,d0
+		bpl.s	@scrollRight
+		bset	d6,(v_bg3_scroll_flags).w
+		bra.s	@return
+	@scrollRight:
+		addq.b	#1,d6
+		bset	d6,(v_bg3_scroll_flags).w
+	@return:
+		rts
+
+
 		endc
 
 
@@ -6181,7 +10350,723 @@ LevLoad_Row:
 		rts	
 ; End of function LevelLayoutLoad2
 
-		include	"_inc\DynamicLevelEvents.asm"
+
+; ---------------------------------------------------------------------------
+; Dynamic level events
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+DynamicLevelEvents:
+		moveq	#0,d0
+		move.b	(v_zone).w,d0
+		add.w	d0,d0
+		move.w	DLE_Index(pc,d0.w),d0
+		jsr	DLE_Index(pc,d0.w) ; run level-specific events
+		moveq	#2,d1
+		move.w	(v_limitbtm1).w,d0
+		sub.w	(v_limitbtm2).w,d0 ; has lower level boundary changed recently?
+		beq.s	DLE_NoChg	; if not, branch
+		bcc.s	loc_6DAC
+
+		neg.w	d1
+		move.w	(v_screenposy).w,d0
+		cmp.w	(v_limitbtm1).w,d0
+		bls.s	loc_6DA0
+		move.w	d0,(v_limitbtm2).w
+		andi.w	#$FFFE,(v_limitbtm2).w
+
+loc_6DA0:
+		add.w	d1,(v_limitbtm2).w
+		move.b	#1,(f_bgscrollvert).w
+
+DLE_NoChg:
+		rts
+; ===========================================================================
+
+loc_6DAC:
+		move.w	(v_screenposy).w,d0
+		addq.w	#8,d0
+		cmp.w	(v_limitbtm2).w,d0
+		bcs.s	loc_6DC4
+		btst	#1,(v_player+obStatus).w
+		beq.s	loc_6DC4
+		add.w	d1,d1
+		add.w	d1,d1
+
+loc_6DC4:
+		add.w	d1,(v_limitbtm2).w
+		move.b	#1,(f_bgscrollvert).w
+		rts
+; End of function DynamicLevelEvents
+
+; ===========================================================================
+; ---------------------------------------------------------------------------
+; Offset index for dynamic level events
+; ---------------------------------------------------------------------------
+DLE_Index:	dc.w DLE_GHZ-DLE_Index, DLE_LZ-DLE_Index
+		dc.w DLE_MZ-DLE_Index, DLE_SLZ-DLE_Index
+		dc.w DLE_SYZ-DLE_Index, DLE_SBZ-DLE_Index
+		zonewarning DLE_Index,2
+		dc.w DLE_Ending-DLE_Index
+; ===========================================================================
+; ---------------------------------------------------------------------------
+; Green	Hill Zone dynamic level events
+; ---------------------------------------------------------------------------
+
+DLE_GHZ:
+		moveq	#0,d0
+		move.b	(v_act).w,d0
+		add.w	d0,d0
+		move.w	DLE_GHZx(pc,d0.w),d0
+		jmp	DLE_GHZx(pc,d0.w)
+; ===========================================================================
+DLE_GHZx:	dc.w DLE_GHZ1-DLE_GHZx
+		dc.w DLE_GHZ2-DLE_GHZx
+		dc.w DLE_GHZ3-DLE_GHZx
+; ===========================================================================
+
+DLE_GHZ1:
+		move.w	#$300,(v_limitbtm1).w ; set lower y-boundary
+		cmpi.w	#$1780,(v_screenposx).w ; has the camera reached $1780 on x-axis?
+		bcs.s	locret_6E08	; if not, branch
+		move.w	#$400,(v_limitbtm1).w ; set lower y-boundary
+
+locret_6E08:
+		rts
+; ===========================================================================
+
+DLE_GHZ2:
+		move.w	#$300,(v_limitbtm1).w
+		cmpi.w	#$ED0,(v_screenposx).w
+		bcs.s	locret_6E3A
+		move.w	#$200,(v_limitbtm1).w
+		cmpi.w	#$1600,(v_screenposx).w
+		bcs.s	locret_6E3A
+		move.w	#$400,(v_limitbtm1).w
+		cmpi.w	#$1D60,(v_screenposx).w
+		bcs.s	locret_6E3A
+		move.w	#$300,(v_limitbtm1).w
+
+locret_6E3A:
+		rts
+; ===========================================================================
+
+DLE_GHZ3:
+		moveq	#0,d0
+		move.b	(v_dle_routine).w,d0
+		move.w	off_6E4A(pc,d0.w),d0
+		jmp	off_6E4A(pc,d0.w)
+; ===========================================================================
+off_6E4A:	dc.w DLE_GHZ3main-off_6E4A
+		dc.w DLE_GHZ3boss-off_6E4A
+		dc.w DLE_GHZ3end-off_6E4A
+; ===========================================================================
+
+DLE_GHZ3main:
+		move.w	#$300,(v_limitbtm1).w
+		cmpi.w	#$380,(v_screenposx).w
+		bcs.s	locret_6E96
+		move.w	#$310,(v_limitbtm1).w
+		cmpi.w	#$960,(v_screenposx).w
+		bcs.s	locret_6E96
+		cmpi.w	#$280,(v_screenposy).w
+		bcs.s	loc_6E98
+		move.w	#$400,(v_limitbtm1).w
+		cmpi.w	#$1380,(v_screenposx).w
+		bcc.s	loc_6E8E
+		move.w	#$4C0,(v_limitbtm1).w
+		move.w	#$4C0,(v_limitbtm2).w
+
+loc_6E8E:
+		cmpi.w	#$1700,(v_screenposx).w
+		bcc.s	loc_6E98
+
+locret_6E96:
+		rts
+; ===========================================================================
+
+loc_6E98:
+		move.w	#$300,(v_limitbtm1).w
+		addq.b	#2,(v_dle_routine).w
+		rts
+; ===========================================================================
+
+DLE_GHZ3boss:
+		cmpi.w	#$960,(v_screenposx).w
+		bcc.s	loc_6EB0
+		subq.b	#2,(v_dle_routine).w
+
+loc_6EB0:
+		cmpi.w	#$2960,(v_screenposx).w
+		bcs.s	locret_6EE8
+		bsr.w	FindFreeObj
+		bne.s	loc_6ED0
+		move.b	#id_BossGreenHill,0(a1) ; load GHZ boss	object
+		move.w	#$2A60,obX(a1)
+		move.w	#$280,obY(a1)
+
+loc_6ED0:
+		move.w	#bgm_Boss,d0
+		bsr.w	PlaySound	; play boss music
+		move.b	#1,(f_lockscreen).w ; lock screen
+		addq.b	#2,(v_dle_routine).w
+		moveq	#plcid_Boss,d0
+		bra.w	AddPLC		; load boss patterns
+; ===========================================================================
+
+locret_6EE8:
+		rts
+; ===========================================================================
+
+DLE_GHZ3end:
+		move.w	(v_screenposx).w,(v_limitleft2).w
+		rts
+; ===========================================================================
+; ---------------------------------------------------------------------------
+; Labyrinth Zone dynamic level events
+; ---------------------------------------------------------------------------
+
+DLE_LZ:
+		moveq	#0,d0
+		move.b	(v_act).w,d0
+		add.w	d0,d0
+		move.w	DLE_LZx(pc,d0.w),d0
+		jmp	DLE_LZx(pc,d0.w)
+; ===========================================================================
+DLE_LZx:	dc.w DLE_LZ12-DLE_LZx
+		dc.w DLE_LZ12-DLE_LZx
+		dc.w DLE_LZ3-DLE_LZx
+		dc.w DLE_SBZ3-DLE_LZx
+; ===========================================================================
+
+DLE_LZ12:
+		rts
+; ===========================================================================
+
+DLE_LZ3:
+		tst.b	(f_switch+$F).w	; has switch $F	been pressed?
+		beq.s	loc_6F28	; if not, branch
+		lea	(v_lvllayout+$106).w,a1
+		cmpi.b	#7,(a1)
+		beq.s	loc_6F28
+		move.b	#7,(a1)		; modify level layout
+		move.w	#sfx_Rumbling,d0
+		bsr.w	PlaySound_Special ; play rumbling sound
+
+loc_6F28:
+		tst.b	(v_dle_routine).w
+		bne.s	locret_6F64
+		cmpi.w	#$1CA0,(v_screenposx).w
+		bcs.s	locret_6F62
+		cmpi.w	#$600,(v_screenposy).w
+		bcc.s	locret_6F62
+		bsr.w	FindFreeObj
+		bne.s	loc_6F4A
+		move.b	#id_BossLabyrinth,0(a1) ; load LZ boss object
+
+loc_6F4A:
+		move.w	#bgm_Boss,d0
+		bsr.w	PlaySound	; play boss music
+		move.b	#1,(f_lockscreen).w ; lock screen
+		addq.b	#2,(v_dle_routine).w
+		moveq	#plcid_Boss,d0
+		bra.w	AddPLC		; load boss patterns
+; ===========================================================================
+
+locret_6F62:
+		rts
+; ===========================================================================
+
+locret_6F64:
+		rts
+; ===========================================================================
+
+DLE_SBZ3:
+		cmpi.w	#$D00,(v_screenposx).w
+		bcs.s	locret_6F8C
+		cmpi.w	#$18,(v_player+obY).w ; has Sonic reached the top of the level?
+		bcc.s	locret_6F8C	; if not, branch
+		clr.b	(v_lastlamp).w
+		move.w	#1,(f_restart).w ; restart level
+		move.w	#(id_SBZ<<8)+2,(v_zone).w ; set level number to 0502 (FZ)
+		move.b	#1,(f_playerctrl).w ; lock controls
+
+locret_6F8C:
+		rts
+; ===========================================================================
+; ---------------------------------------------------------------------------
+; Marble Zone dynamic level events
+; ---------------------------------------------------------------------------
+
+DLE_MZ:
+		moveq	#0,d0
+		move.b	(v_act).w,d0
+		add.w	d0,d0
+		move.w	DLE_MZx(pc,d0.w),d0
+		jmp	DLE_MZx(pc,d0.w)
+; ===========================================================================
+DLE_MZx:	dc.w DLE_MZ1-DLE_MZx
+		dc.w DLE_MZ2-DLE_MZx
+		dc.w DLE_MZ3-DLE_MZx
+; ===========================================================================
+
+DLE_MZ1:
+		moveq	#0,d0
+		move.b	(v_dle_routine).w,d0
+		move.w	off_6FB2(pc,d0.w),d0
+		jmp	off_6FB2(pc,d0.w)
+; ===========================================================================
+off_6FB2:	dc.w loc_6FBA-off_6FB2
+		dc.w loc_6FEA-off_6FB2
+		dc.w loc_702E-off_6FB2
+		dc.w loc_7050-off_6FB2
+; ===========================================================================
+
+loc_6FBA:
+		move.w	#$1D0,(v_limitbtm1).w
+		cmpi.w	#$700,(v_screenposx).w
+		bcs.s	locret_6FE8
+		move.w	#$220,(v_limitbtm1).w
+		cmpi.w	#$D00,(v_screenposx).w
+		bcs.s	locret_6FE8
+		move.w	#$340,(v_limitbtm1).w
+		cmpi.w	#$340,(v_screenposy).w
+		bcs.s	locret_6FE8
+		addq.b	#2,(v_dle_routine).w
+
+locret_6FE8:
+		rts
+; ===========================================================================
+
+loc_6FEA:
+		cmpi.w	#$340,(v_screenposy).w
+		bcc.s	loc_6FF8
+		subq.b	#2,(v_dle_routine).w
+		rts
+; ===========================================================================
+
+loc_6FF8:
+		move.w	#0,(v_limittop2).w
+		cmpi.w	#$E00,(v_screenposx).w
+		bcc.s	locret_702C
+		move.w	#$340,(v_limittop2).w
+		move.w	#$340,(v_limitbtm1).w
+		cmpi.w	#$A90,(v_screenposx).w
+		bcc.s	locret_702C
+		move.w	#$500,(v_limitbtm1).w
+		cmpi.w	#$370,(v_screenposy).w
+		bcs.s	locret_702C
+		addq.b	#2,(v_dle_routine).w
+
+locret_702C:
+		rts
+; ===========================================================================
+
+loc_702E:
+		cmpi.w	#$370,(v_screenposy).w
+		bcc.s	loc_703C
+		subq.b	#2,(v_dle_routine).w
+		rts
+; ===========================================================================
+
+loc_703C:
+		cmpi.w	#$500,(v_screenposy).w
+		bcs.s	locret_704E
+		if Revision=0
+		else
+			cmpi.w	#$B80,(v_screenposx).w
+			bcs.s	locret_704E
+		endc
+		move.w	#$500,(v_limittop2).w
+		addq.b	#2,(v_dle_routine).w
+
+locret_704E:
+		rts
+; ===========================================================================
+
+loc_7050:
+		if Revision=0
+		else
+			cmpi.w	#$B80,(v_screenposx).w
+			bcc.s	locj_76B8
+			cmpi.w	#$340,(v_limittop2).w
+			beq.s	locret_7072
+			subq.w	#2,(v_limittop2).w
+			rts
+	locj_76B8:
+			cmpi.w	#$500,(v_limittop2).w
+			beq.s	locj_76CE
+			cmpi.w	#$500,(v_screenposy).w
+			bcs.s	locret_7072
+			move.w	#$500,(v_limittop2).w
+	locj_76CE:
+		endc
+
+		cmpi.w	#$E70,(v_screenposx).w
+		bcs.s	locret_7072
+		move.w	#0,(v_limittop2).w
+		move.w	#$500,(v_limitbtm1).w
+		cmpi.w	#$1430,(v_screenposx).w
+		bcs.s	locret_7072
+		move.w	#$210,(v_limitbtm1).w
+
+locret_7072:
+		rts
+; ===========================================================================
+
+DLE_MZ2:
+		move.w	#$520,(v_limitbtm1).w
+		cmpi.w	#$1700,(v_screenposx).w
+		bcs.s	locret_7088
+		move.w	#$200,(v_limitbtm1).w
+
+locret_7088:
+		rts
+; ===========================================================================
+
+DLE_MZ3:
+		moveq	#0,d0
+		move.b	(v_dle_routine).w,d0
+		move.w	off_7098(pc,d0.w),d0
+		jmp	off_7098(pc,d0.w)
+; ===========================================================================
+off_7098:	dc.w DLE_MZ3boss-off_7098
+		dc.w DLE_MZ3end-off_7098
+; ===========================================================================
+
+DLE_MZ3boss:
+		move.w	#$720,(v_limitbtm1).w
+		cmpi.w	#$1560,(v_screenposx).w
+		bcs.s	locret_70E8
+		move.w	#$210,(v_limitbtm1).w
+		cmpi.w	#$17F0,(v_screenposx).w
+		bcs.s	locret_70E8
+		bsr.w	FindFreeObj
+		bne.s	loc_70D0
+		move.b	#id_BossMarble,0(a1) ; load MZ boss object
+		move.w	#$19F0,obX(a1)
+		move.w	#$22C,obY(a1)
+
+loc_70D0:
+		move.w	#bgm_Boss,d0
+		bsr.w	PlaySound	; play boss music
+		move.b	#1,(f_lockscreen).w ; lock screen
+		addq.b	#2,(v_dle_routine).w
+		moveq	#plcid_Boss,d0
+		bra.w	AddPLC		; load boss patterns
+; ===========================================================================
+
+locret_70E8:
+		rts
+; ===========================================================================
+
+DLE_MZ3end:
+		move.w	(v_screenposx).w,(v_limitleft2).w
+		rts
+; ===========================================================================
+; ---------------------------------------------------------------------------
+; Star Light Zone dynamic level events
+; ---------------------------------------------------------------------------
+
+DLE_SLZ:
+		moveq	#0,d0
+		move.b	(v_act).w,d0
+		add.w	d0,d0
+		move.w	DLE_SLZx(pc,d0.w),d0
+		jmp	DLE_SLZx(pc,d0.w)
+; ===========================================================================
+DLE_SLZx:	dc.w DLE_SLZ12-DLE_SLZx
+		dc.w DLE_SLZ12-DLE_SLZx
+		dc.w DLE_SLZ3-DLE_SLZx
+; ===========================================================================
+
+DLE_SLZ12:
+		rts
+; ===========================================================================
+
+DLE_SLZ3:
+		moveq	#0,d0
+		move.b	(v_dle_routine).w,d0
+		move.w	off_7118(pc,d0.w),d0
+		jmp	off_7118(pc,d0.w)
+; ===========================================================================
+off_7118:	dc.w DLE_SLZ3main-off_7118
+		dc.w DLE_SLZ3boss-off_7118
+		dc.w DLE_SLZ3end-off_7118
+; ===========================================================================
+
+DLE_SLZ3main:
+		cmpi.w	#$1E70,(v_screenposx).w
+		bcs.s	locret_7130
+		move.w	#$210,(v_limitbtm1).w
+		addq.b	#2,(v_dle_routine).w
+
+locret_7130:
+		rts
+; ===========================================================================
+
+DLE_SLZ3boss:
+		cmpi.w	#$2000,(v_screenposx).w
+		bcs.s	locret_715C
+		bsr.w	FindFreeObj
+		bne.s	loc_7144
+		move.b	#id_BossStarLight,(a1) ; load SLZ boss object
+
+loc_7144:
+		move.w	#bgm_Boss,d0
+		bsr.w	PlaySound	; play boss music
+		move.b	#1,(f_lockscreen).w ; lock screen
+		addq.b	#2,(v_dle_routine).w
+		moveq	#plcid_Boss,d0
+		bra.w	AddPLC		; load boss patterns
+; ===========================================================================
+
+locret_715C:
+		rts
+; ===========================================================================
+
+DLE_SLZ3end:
+		move.w	(v_screenposx).w,(v_limitleft2).w
+		rts
+		rts
+; ===========================================================================
+; ---------------------------------------------------------------------------
+; Spring Yard Zone dynamic level events
+; ---------------------------------------------------------------------------
+
+DLE_SYZ:
+		moveq	#0,d0
+		move.b	(v_act).w,d0
+		add.w	d0,d0
+		move.w	DLE_SYZx(pc,d0.w),d0
+		jmp	DLE_SYZx(pc,d0.w)
+; ===========================================================================
+DLE_SYZx:	dc.w DLE_SYZ1-DLE_SYZx
+		dc.w DLE_SYZ2-DLE_SYZx
+		dc.w DLE_SYZ3-DLE_SYZx
+; ===========================================================================
+
+DLE_SYZ1:
+		rts
+; ===========================================================================
+
+DLE_SYZ2:
+		move.w	#$520,(v_limitbtm1).w
+		cmpi.w	#$25A0,(v_screenposx).w
+		bcs.s	locret_71A2
+		move.w	#$420,(v_limitbtm1).w
+		cmpi.w	#$4D0,(v_player+obY).w
+		bcs.s	locret_71A2
+		move.w	#$520,(v_limitbtm1).w
+
+locret_71A2:
+		rts
+; ===========================================================================
+
+DLE_SYZ3:
+		moveq	#0,d0
+		move.b	(v_dle_routine).w,d0
+		move.w	off_71B2(pc,d0.w),d0
+		jmp	off_71B2(pc,d0.w)
+; ===========================================================================
+off_71B2:	dc.w DLE_SYZ3main-off_71B2
+		dc.w DLE_SYZ3boss-off_71B2
+		dc.w DLE_SYZ3end-off_71B2
+; ===========================================================================
+
+DLE_SYZ3main:
+		cmpi.w	#$2AC0,(v_screenposx).w
+		bcs.s	locret_71CE
+		bsr.w	FindFreeObj
+		bne.s	locret_71CE
+		move.b	#id_BossBlock,(a1) ; load blocks that boss picks up
+		addq.b	#2,(v_dle_routine).w
+
+locret_71CE:
+		rts
+; ===========================================================================
+
+DLE_SYZ3boss:
+		cmpi.w	#$2C00,(v_screenposx).w
+		bcs.s	locret_7200
+		move.w	#$4CC,(v_limitbtm1).w
+		bsr.w	FindFreeObj
+		bne.s	loc_71EC
+		move.b	#id_BossSpringYard,(a1) ; load SYZ boss	object
+		addq.b	#2,(v_dle_routine).w
+
+loc_71EC:
+		move.w	#bgm_Boss,d0
+		bsr.w	PlaySound	; play boss music
+		move.b	#1,(f_lockscreen).w ; lock screen
+		moveq	#plcid_Boss,d0
+		bra.w	AddPLC		; load boss patterns
+; ===========================================================================
+
+locret_7200:
+		rts
+; ===========================================================================
+
+DLE_SYZ3end:
+		move.w	(v_screenposx).w,(v_limitleft2).w
+		rts
+; ===========================================================================
+; ---------------------------------------------------------------------------
+; Scrap	Brain Zone dynamic level events
+; ---------------------------------------------------------------------------
+
+DLE_SBZ:
+		moveq	#0,d0
+		move.b	(v_act).w,d0
+		add.w	d0,d0
+		move.w	DLE_SBZx(pc,d0.w),d0
+		jmp	DLE_SBZx(pc,d0.w)
+; ===========================================================================
+DLE_SBZx:	dc.w DLE_SBZ1-DLE_SBZx
+		dc.w DLE_SBZ2-DLE_SBZx
+		dc.w DLE_FZ-DLE_SBZx
+; ===========================================================================
+
+DLE_SBZ1:
+		move.w	#$720,(v_limitbtm1).w
+		cmpi.w	#$1880,(v_screenposx).w
+		bcs.s	locret_7242
+		move.w	#$620,(v_limitbtm1).w
+		cmpi.w	#$2000,(v_screenposx).w
+		bcs.s	locret_7242
+		move.w	#$2A0,(v_limitbtm1).w
+
+locret_7242:
+		rts
+; ===========================================================================
+
+DLE_SBZ2:
+		moveq	#0,d0
+		move.b	(v_dle_routine).w,d0
+		move.w	off_7252(pc,d0.w),d0
+		jmp	off_7252(pc,d0.w)
+; ===========================================================================
+off_7252:	dc.w DLE_SBZ2main-off_7252
+		dc.w DLE_SBZ2boss-off_7252
+		dc.w DLE_SBZ2boss2-off_7252
+		dc.w DLE_SBZ2end-off_7252
+; ===========================================================================
+
+DLE_SBZ2main:
+		move.w	#$800,(v_limitbtm1).w
+		cmpi.w	#$1800,(v_screenposx).w
+		bcs.s	locret_727A
+		move.w	#$510,(v_limitbtm1).w
+		cmpi.w	#$1E00,(v_screenposx).w
+		bcs.s	locret_727A
+		addq.b	#2,(v_dle_routine).w
+
+locret_727A:
+		rts
+; ===========================================================================
+
+DLE_SBZ2boss:
+		cmpi.w	#$1EB0,(v_screenposx).w
+		bcs.s	locret_7298
+		bsr.w	FindFreeObj
+		bne.s	locret_7298
+		move.b	#id_FalseFloor,(a1) ; load collapsing block object
+		addq.b	#2,(v_dle_routine).w
+		moveq	#plcid_EggmanSBZ2,d0
+		bra.w	AddPLC		; load SBZ2 Eggman patterns
+; ===========================================================================
+
+locret_7298:
+		rts
+; ===========================================================================
+
+DLE_SBZ2boss2:
+		cmpi.w	#$1F60,(v_screenposx).w
+		bcs.s	loc_72B6
+		bsr.w	FindFreeObj
+		bne.s	loc_72B0
+		move.b	#id_ScrapEggman,(a1) ; load SBZ2 Eggman object
+		addq.b	#2,(v_dle_routine).w
+
+loc_72B0:
+		move.b	#1,(f_lockscreen).w ; lock screen
+
+loc_72B6:
+		bra.s	loc_72C2
+; ===========================================================================
+
+DLE_SBZ2end:
+		cmpi.w	#$2050,(v_screenposx).w
+		bcs.s	loc_72C2
+		rts
+; ===========================================================================
+
+loc_72C2:
+		move.w	(v_screenposx).w,(v_limitleft2).w
+		rts
+; ===========================================================================
+
+DLE_FZ:
+		moveq	#0,d0
+		move.b	(v_dle_routine).w,d0
+		move.w	off_72D8(pc,d0.w),d0
+		jmp	off_72D8(pc,d0.w)
+; ===========================================================================
+off_72D8:	dc.w DLE_FZmain-off_72D8, DLE_FZboss-off_72D8
+		dc.w DLE_FZend-off_72D8, locret_7322-off_72D8
+		dc.w DLE_FZend2-off_72D8
+; ===========================================================================
+
+DLE_FZmain:
+		cmpi.w	#$2148,(v_screenposx).w
+		bcs.s	loc_72F4
+		addq.b	#2,(v_dle_routine).w
+		moveq	#plcid_FZBoss,d0
+		bsr.w	AddPLC		; load FZ boss patterns
+
+loc_72F4:
+		bra.s	loc_72C2
+; ===========================================================================
+
+DLE_FZboss:
+		cmpi.w	#$2300,(v_screenposx).w
+		bcs.s	loc_7312
+		bsr.w	FindFreeObj
+		bne.s	loc_7312
+		move.b	#id_BossFinal,(a1) ; load FZ boss object
+		addq.b	#2,(v_dle_routine).w
+		move.b	#1,(f_lockscreen).w ; lock screen
+
+loc_7312:
+		bra.s	loc_72C2
+; ===========================================================================
+
+DLE_FZend:
+		cmpi.w	#$2450,(v_screenposx).w
+		bcs.s	loc_7320
+		addq.b	#2,(v_dle_routine).w
+
+loc_7320:
+		bra.s	loc_72C2
+; ===========================================================================
+
+locret_7322:
+		rts
+; ===========================================================================
+
+DLE_FZend2:
+		bra.s	loc_72C2
+; ===========================================================================
+; ---------------------------------------------------------------------------
+; Ending sequence dynamic level events (empty)
+; ---------------------------------------------------------------------------
+
+DLE_Ending:
+		rts
+
+
 
 ; ---------------------------------------------------------------------------
 ; Object 11 - GHZ bridge
@@ -13576,7 +18461,293 @@ loc_D37C:
 ; Object pointers
 ; ---------------------------------------------------------------------------
 Obj_Index:
-		include	"_inc\Object Pointers.asm"
+; ---------------------------------------------------------------------------
+; Object pointers
+; ---------------------------------------------------------------------------
+ptr_SonicPlayer:	dc.l SonicPlayer	; $01
+ptr_Obj02:		dc.l NullObject
+ptr_Obj03:		dc.l NullObject
+ptr_Obj04:		dc.l NullObject
+ptr_Obj05:		dc.l NullObject
+ptr_Obj06:		dc.l NullObject
+ptr_Obj07:		dc.l NullObject
+ptr_Splash:		dc.l Splash		; $08
+ptr_SonicSpecial:	dc.l SonicSpecial
+ptr_DrownCount:		dc.l DrownCount
+ptr_Pole:		dc.l Pole
+ptr_FlapDoor:		dc.l FlapDoor
+ptr_Signpost:		dc.l Signpost
+ptr_TitleSonic:		dc.l TitleSonic
+ptr_PSBTM:		dc.l PSBTM
+ptr_Obj10:		dc.l Obj10		; $10
+ptr_Bridge:		dc.l Bridge
+ptr_SpinningLight:	dc.l SpinningLight
+ptr_LavaMaker:		dc.l LavaMaker
+ptr_LavaBall:		dc.l LavaBall
+ptr_SwingingPlatform:	dc.l SwingingPlatform
+ptr_Harpoon:		dc.l Harpoon
+ptr_Helix:		dc.l Helix
+ptr_BasicPlatform:	dc.l BasicPlatform	; $18
+ptr_Obj19:		dc.l Obj19
+ptr_CollapseLedge:	dc.l CollapseLedge
+ptr_WaterSurface:	dc.l WaterSurface
+ptr_Scenery:		dc.l Scenery
+ptr_MagicSwitch:	dc.l MagicSwitch
+ptr_BallHog:		dc.l BallHog
+ptr_Crabmeat:		dc.l Crabmeat
+ptr_Cannonball:		dc.l Cannonball		; $20
+ptr_HUD:		dc.l HUD
+ptr_BuzzBomber:		dc.l BuzzBomber
+ptr_Missile:		dc.l Missile
+ptr_MissileDissolve:	dc.l MissileDissolve
+ptr_Rings:		dc.l Rings
+ptr_Monitor:		dc.l Monitor
+ptr_ExplosionItem:	dc.l ExplosionItem
+ptr_Animals:		dc.l Animals		; $28
+ptr_Points:		dc.l Points
+ptr_AutoDoor:		dc.l AutoDoor
+ptr_Chopper:		dc.l Chopper
+ptr_Jaws:		dc.l Jaws
+ptr_Burrobot:		dc.l Burrobot
+ptr_PowerUp:		dc.l PowerUp
+ptr_LargeGrass:		dc.l LargeGrass
+ptr_GlassBlock:		dc.l GlassBlock		; $30
+ptr_ChainStomp:		dc.l ChainStomp
+ptr_Button:		dc.l Button
+ptr_PushBlock:		dc.l PushBlock
+ptr_TitleCard:		dc.l TitleCard
+ptr_GrassFire:		dc.l GrassFire
+ptr_Spikes:		dc.l Spikes
+ptr_RingLoss:		dc.l RingLoss
+ptr_ShieldItem:		dc.l ShieldItem		; $38
+ptr_GameOverCard:	dc.l GameOverCard
+ptr_GotThroughCard:	dc.l GotThroughCard
+ptr_PurpleRock:		dc.l PurpleRock
+ptr_SmashWall:		dc.l SmashWall
+ptr_BossGreenHill:	dc.l BossGreenHill
+ptr_Prison:		dc.l Prison
+ptr_ExplosionBomb:	dc.l ExplosionBomb
+ptr_MotoBug:		dc.l MotoBug		; $40
+ptr_Springs:		dc.l Springs
+ptr_Newtron:		dc.l Newtron
+ptr_Roller:		dc.l Roller
+ptr_EdgeWalls:		dc.l EdgeWalls
+ptr_SideStomp:		dc.l SideStomp
+ptr_MarbleBrick:	dc.l MarbleBrick
+ptr_Bumper:		dc.l Bumper
+ptr_BossBall:		dc.l BossBall		; $48
+ptr_WaterSound:		dc.l WaterSound
+ptr_VanishSonic:	dc.l VanishSonic
+ptr_GiantRing:		dc.l GiantRing
+ptr_GeyserMaker:	dc.l GeyserMaker
+ptr_LavaGeyser:		dc.l LavaGeyser
+ptr_LavaWall:		dc.l LavaWall
+ptr_Obj4F:		dc.l Obj4F
+ptr_Yadrin:		dc.l Yadrin		; $50
+ptr_SmashBlock:		dc.l SmashBlock
+ptr_MovingBlock:	dc.l MovingBlock
+ptr_CollapseFloor:	dc.l CollapseFloor
+ptr_LavaTag:		dc.l LavaTag
+ptr_Basaran:		dc.l Basaran
+ptr_FloatingBlock:	dc.l FloatingBlock
+ptr_SpikeBall:		dc.l SpikeBall
+ptr_BigSpikeBall:	dc.l BigSpikeBall	; $58
+ptr_Elevator:		dc.l Elevator
+ptr_CirclingPlatform:	dc.l CirclingPlatform
+ptr_Staircase:		dc.l Staircase
+ptr_Pylon:		dc.l Pylon
+ptr_Fan:		dc.l Fan
+ptr_Seesaw:		dc.l Seesaw
+ptr_Bomb:		dc.l Bomb
+ptr_Orbinaut:		dc.l Orbinaut		; $60
+ptr_LabyrinthBlock:	dc.l LabyrinthBlock
+ptr_Gargoyle:		dc.l Gargoyle
+ptr_LabyrinthConvey:	dc.l LabyrinthConvey
+ptr_Bubble:		dc.l Bubble
+ptr_Waterfall:		dc.l Waterfall
+ptr_Junction:		dc.l Junction
+ptr_RunningDisc:	dc.l RunningDisc
+ptr_Conveyor:		dc.l Conveyor		; $68
+ptr_SpinPlatform:	dc.l SpinPlatform
+ptr_Saws:		dc.l Saws
+ptr_ScrapStomp:		dc.l ScrapStomp
+ptr_VanishPlatform:	dc.l VanishPlatform
+ptr_Flamethrower:	dc.l Flamethrower
+ptr_Electro:		dc.l Electro
+ptr_SpinConvey:		dc.l SpinConvey
+ptr_Girder:		dc.l Girder		; $70
+ptr_Invisibarrier:	dc.l Invisibarrier
+ptr_Teleport:		dc.l Teleport
+ptr_BossMarble:		dc.l BossMarble
+ptr_BossFire:		dc.l BossFire
+ptr_BossSpringYard:	dc.l BossSpringYard
+ptr_BossBlock:		dc.l BossBlock
+ptr_BossLabyrinth:	dc.l BossLabyrinth
+ptr_Caterkiller:	dc.l Caterkiller	; $78
+ptr_Lamppost:		dc.l Lamppost
+ptr_BossStarLight:	dc.l BossStarLight
+ptr_BossSpikeball:	dc.l BossSpikeball
+ptr_RingFlash:		dc.l RingFlash
+ptr_HiddenBonus:	dc.l HiddenBonus
+ptr_SSResult:		dc.l SSResult
+ptr_SSRChaos:		dc.l SSRChaos
+ptr_ContScrItem:	dc.l ContScrItem	; $80
+ptr_ContSonic:		dc.l ContSonic
+ptr_ScrapEggman:	dc.l ScrapEggman
+ptr_FalseFloor:		dc.l FalseFloor
+ptr_EggmanCylinder:	dc.l EggmanCylinder
+ptr_BossFinal:		dc.l BossFinal
+ptr_BossPlasma:		dc.l BossPlasma
+ptr_EndSonic:		dc.l EndSonic
+ptr_EndChaos:		dc.l EndChaos		; $88
+ptr_EndSTH:		dc.l EndSTH
+ptr_CreditsText:	dc.l CreditsText
+ptr_EndEggman:		dc.l EndEggman
+ptr_TryChaos:		dc.l TryChaos
+
+NullObject:
+		;jmp	(DeleteObject).l	; It would be safer to have this instruction here, but instead it just falls through to ObjectFall
+
+id_SonicPlayer:		equ ((ptr_SonicPlayer-Obj_Index)/4)+1		; $01
+id_Obj02:		equ ((ptr_Obj02-Obj_Index)/4)+1
+id_Obj03:		equ ((ptr_Obj03-Obj_Index)/4)+1
+id_Obj04:		equ ((ptr_Obj04-Obj_Index)/4)+1
+id_Obj05:		equ ((ptr_Obj05-Obj_Index)/4)+1
+id_Obj06:		equ ((ptr_Obj06-Obj_Index)/4)+1
+id_Obj07:		equ ((ptr_Obj07-Obj_Index)/4)+1
+id_Splash:		equ ((ptr_Splash-Obj_Index)/4)+1		; $08
+id_SonicSpecial:	equ ((ptr_SonicSpecial-Obj_Index)/4)+1
+id_DrownCount:		equ ((ptr_DrownCount-Obj_Index)/4)+1
+id_Pole:		equ ((ptr_Pole-Obj_Index)/4)+1
+id_FlapDoor:		equ ((ptr_FlapDoor-Obj_Index)/4)+1
+id_Signpost:		equ ((ptr_Signpost-Obj_Index)/4)+1
+id_TitleSonic:		equ ((ptr_TitleSonic-Obj_Index)/4)+1
+id_PSBTM:		equ ((ptr_PSBTM-Obj_Index)/4)+1
+id_Obj10:		equ ((ptr_Obj10-Obj_Index)/4)+1			; $10
+id_Bridge:		equ ((ptr_Bridge-Obj_Index)/4)+1
+id_SpinningLight:	equ ((ptr_SpinningLight-Obj_Index)/4)+1
+id_LavaMaker:		equ ((ptr_LavaMaker-Obj_Index)/4)+1
+id_LavaBall:		equ ((ptr_LavaBall-Obj_Index)/4)+1
+id_SwingingPlatform:	equ ((ptr_SwingingPlatform-Obj_Index)/4)+1
+id_Harpoon:		equ ((ptr_Harpoon-Obj_Index)/4)+1
+id_Helix:		equ ((ptr_Helix-Obj_Index)/4)+1
+id_BasicPlatform:	equ ((ptr_BasicPlatform-Obj_Index)/4)+1		; $18
+id_Obj19:		equ ((ptr_Obj19-Obj_Index)/4)+1
+id_CollapseLedge:	equ ((ptr_CollapseLedge-Obj_Index)/4)+1
+id_WaterSurface:	equ ((ptr_WaterSurface-Obj_Index)/4)+1
+id_Scenery:		equ ((ptr_Scenery-Obj_Index)/4)+1
+id_MagicSwitch:		equ ((ptr_MagicSwitch-Obj_Index)/4)+1
+id_BallHog:		equ ((ptr_BallHog-Obj_Index)/4)+1
+id_Crabmeat:		equ ((ptr_Crabmeat-Obj_Index)/4)+1
+id_Cannonball:		equ ((ptr_Cannonball-Obj_Index)/4)+1		; $20
+id_HUD:			equ ((ptr_HUD-Obj_Index)/4)+1
+id_BuzzBomber:		equ ((ptr_BuzzBomber-Obj_Index)/4)+1
+id_Missile:		equ ((ptr_Missile-Obj_Index)/4)+1
+id_MissileDissolve:	equ ((ptr_MissileDissolve-Obj_Index)/4)+1
+id_Rings:		equ ((ptr_Rings-Obj_Index)/4)+1
+id_Monitor:		equ ((ptr_Monitor-Obj_Index)/4)+1
+id_ExplosionItem:	equ ((ptr_ExplosionItem-Obj_Index)/4)+1
+id_Animals:		equ ((ptr_Animals-Obj_Index)/4)+1		; $28
+id_Points:		equ ((ptr_Points-Obj_Index)/4)+1
+id_AutoDoor:		equ ((ptr_AutoDoor-Obj_Index)/4)+1
+id_Chopper:		equ ((ptr_Chopper-Obj_Index)/4)+1
+id_Jaws:		equ ((ptr_Jaws-Obj_Index)/4)+1
+id_Burrobot:		equ ((ptr_Burrobot-Obj_Index)/4)+1
+id_PowerUp:		equ ((ptr_PowerUp-Obj_Index)/4)+1
+id_LargeGrass:		equ ((ptr_LargeGrass-Obj_Index)/4)+1
+id_GlassBlock:		equ ((ptr_GlassBlock-Obj_Index)/4)+1		; $30
+id_ChainStomp:		equ ((ptr_ChainStomp-Obj_Index)/4)+1
+id_Button:		equ ((ptr_Button-Obj_Index)/4)+1
+id_PushBlock:		equ ((ptr_PushBlock-Obj_Index)/4)+1
+id_TitleCard:		equ ((ptr_TitleCard-Obj_Index)/4)+1
+id_GrassFire:		equ ((ptr_GrassFire-Obj_Index)/4)+1
+id_Spikes:		equ ((ptr_Spikes-Obj_Index)/4)+1
+id_RingLoss:		equ ((ptr_RingLoss-Obj_Index)/4)+1
+id_ShieldItem:		equ ((ptr_ShieldItem-Obj_Index)/4)+1		; $38
+id_GameOverCard:	equ ((ptr_GameOverCard-Obj_Index)/4)+1
+id_GotThroughCard:	equ ((ptr_GotThroughCard-Obj_Index)/4)+1
+id_PurpleRock:		equ ((ptr_PurpleRock-Obj_Index)/4)+1
+id_SmashWall:		equ ((ptr_SmashWall-Obj_Index)/4)+1
+id_BossGreenHill:	equ ((ptr_BossGreenHill-Obj_Index)/4)+1
+id_Prison:		equ ((ptr_Prison-Obj_Index)/4)+1
+id_ExplosionBomb:	equ ((ptr_ExplosionBomb-Obj_Index)/4)+1
+id_MotoBug:		equ ((ptr_MotoBug-Obj_Index)/4)+1		; $40
+id_Springs:		equ ((ptr_Springs-Obj_Index)/4)+1
+id_Newtron:		equ ((ptr_Newtron-Obj_Index)/4)+1
+id_Roller:		equ ((ptr_Roller-Obj_Index)/4)+1
+id_EdgeWalls:		equ ((ptr_EdgeWalls-Obj_Index)/4)+1
+id_SideStomp:		equ ((ptr_SideStomp-Obj_Index)/4)+1
+id_MarbleBrick:		equ ((ptr_MarbleBrick-Obj_Index)/4)+1
+id_Bumper:		equ ((ptr_Bumper-Obj_Index)/4)+1
+id_BossBall:		equ ((ptr_BossBall-Obj_Index)/4)+1		; $48
+id_WaterSound:		equ ((ptr_WaterSound-Obj_Index)/4)+1
+id_VanishSonic:		equ ((ptr_VanishSonic-Obj_Index)/4)+1
+id_GiantRing:		equ ((ptr_GiantRing-Obj_Index)/4)+1
+id_GeyserMaker:		equ ((ptr_GeyserMaker-Obj_Index)/4)+1
+id_LavaGeyser:		equ ((ptr_LavaGeyser-Obj_Index)/4)+1
+id_LavaWall:		equ ((ptr_LavaWall-Obj_Index)/4)+1
+id_Obj4F:		equ ((ptr_Obj4F-Obj_Index)/4)+1
+id_Yadrin:		equ ((ptr_Yadrin-Obj_Index)/4)+1		; $50
+id_SmashBlock:		equ ((ptr_SmashBlock-Obj_Index)/4)+1
+id_MovingBlock:		equ ((ptr_MovingBlock-Obj_Index)/4)+1
+id_CollapseFloor:	equ ((ptr_CollapseFloor-Obj_Index)/4)+1
+id_LavaTag:		equ ((ptr_LavaTag-Obj_Index)/4)+1
+id_Basaran:		equ ((ptr_Basaran-Obj_Index)/4)+1
+id_FloatingBlock:	equ ((ptr_FloatingBlock-Obj_Index)/4)+1
+id_SpikeBall:		equ ((ptr_SpikeBall-Obj_Index)/4)+1
+id_BigSpikeBall:	equ ((ptr_BigSpikeBall-Obj_Index)/4)+1		; $58
+id_Elevator:		equ ((ptr_Elevator-Obj_Index)/4)+1
+id_CirclingPlatform:	equ ((ptr_CirclingPlatform-Obj_Index)/4)+1
+id_Staircase:		equ ((ptr_Staircase-Obj_Index)/4)+1
+id_Pylon:		equ ((ptr_Pylon-Obj_Index)/4)+1
+id_Fan:			equ ((ptr_Fan-Obj_Index)/4)+1
+id_Seesaw:		equ ((ptr_Seesaw-Obj_Index)/4)+1
+id_Bomb:		equ ((ptr_Bomb-Obj_Index)/4)+1
+id_Orbinaut:		equ ((ptr_Orbinaut-Obj_Index)/4)+1		; $60
+id_LabyrinthBlock:	equ ((ptr_LabyrinthBlock-Obj_Index)/4)+1
+id_Gargoyle:		equ ((ptr_Gargoyle-Obj_Index)/4)+1
+id_LabyrinthConvey:	equ ((ptr_LabyrinthConvey-Obj_Index)/4)+1
+id_Bubble:		equ ((ptr_Bubble-Obj_Index)/4)+1
+id_Waterfall:		equ ((ptr_Waterfall-Obj_Index)/4)+1
+id_Junction:		equ ((ptr_Junction-Obj_Index)/4)+1
+id_RunningDisc:		equ ((ptr_RunningDisc-Obj_Index)/4)+1
+id_Conveyor:		equ ((ptr_Conveyor-Obj_Index)/4)+1		; $68
+id_SpinPlatform:	equ ((ptr_SpinPlatform-Obj_Index)/4)+1
+id_Saws:		equ ((ptr_Saws-Obj_Index)/4)+1
+id_ScrapStomp:		equ ((ptr_ScrapStomp-Obj_Index)/4)+1
+id_VanishPlatform:	equ ((ptr_VanishPlatform-Obj_Index)/4)+1
+id_Flamethrower:	equ ((ptr_Flamethrower-Obj_Index)/4)+1
+id_Electro:		equ ((ptr_Electro-Obj_Index)/4)+1
+id_SpinConvey:		equ ((ptr_SpinConvey-Obj_Index)/4)+1
+id_Girder:		equ ((ptr_Girder-Obj_Index)/4)+1		; $70
+id_Invisibarrier:	equ ((ptr_Invisibarrier-Obj_Index)/4)+1
+id_Teleport:		equ ((ptr_Teleport-Obj_Index)/4)+1
+id_BossMarble:		equ ((ptr_BossMarble-Obj_Index)/4)+1
+id_BossFire:		equ ((ptr_BossFire-Obj_Index)/4)+1
+id_BossSpringYard:	equ ((ptr_BossSpringYard-Obj_Index)/4)+1
+id_BossBlock:		equ ((ptr_BossBlock-Obj_Index)/4)+1
+id_BossLabyrinth:	equ ((ptr_BossLabyrinth-Obj_Index)/4)+1
+id_Caterkiller:		equ ((ptr_Caterkiller-Obj_Index)/4)+1		; $78
+id_Lamppost:		equ ((ptr_Lamppost-Obj_Index)/4)+1
+id_BossStarLight:	equ ((ptr_BossStarLight-Obj_Index)/4)+1
+id_BossSpikeball:	equ ((ptr_BossSpikeball-Obj_Index)/4)+1
+id_RingFlash:		equ ((ptr_RingFlash-Obj_Index)/4)+1
+id_HiddenBonus:		equ ((ptr_HiddenBonus-Obj_Index)/4)+1
+id_SSResult:		equ ((ptr_SSResult-Obj_Index)/4)+1
+id_SSRChaos:		equ ((ptr_SSRChaos-Obj_Index)/4)+1
+id_ContScrItem:		equ ((ptr_ContScrItem-Obj_Index)/4)+1		; $80
+id_ContSonic:		equ ((ptr_ContSonic-Obj_Index)/4)+1
+id_ScrapEggman:		equ ((ptr_ScrapEggman-Obj_Index)/4)+1
+id_FalseFloor:		equ ((ptr_FalseFloor-Obj_Index)/4)+1
+id_EggmanCylinder:	equ ((ptr_EggmanCylinder-Obj_Index)/4)+1
+id_BossFinal:		equ ((ptr_BossFinal-Obj_Index)/4)+1
+id_BossPlasma:		equ ((ptr_BossPlasma-Obj_Index)/4)+1
+id_EndSonic:		equ ((ptr_EndSonic-Obj_Index)/4)+1
+id_EndChaos:		equ ((ptr_EndChaos-Obj_Index)/4)+1		; $88
+id_EndSTH:		equ ((ptr_EndSTH-Obj_Index)/4)+1
+id_CreditsText:		equ ((ptr_CreditsText-Obj_Index)/4)+1
+id_EndEggman:		equ ((ptr_EndEggman-Obj_Index)/4)+1
+id_TryChaos:		equ ((ptr_TryChaos-Obj_Index)/4)+1
 
 ; ---------------------------------------------------------------------------
 ; Subroutine to	make an	object fall downwards, increasingly fast
@@ -32377,7 +37548,15 @@ SS_LayoutIndex:
 ; ---------------------------------------------------------------------------
 ; Special stage start locations
 ; ---------------------------------------------------------------------------
-SS_StartLoc:	include	"_inc\Start Location Array - Special Stages.asm"
+SS_StartLoc:
+		incbin	"startpos\ss1.bin"
+		incbin	"startpos\ss2.bin"
+		incbin	"startpos\ss3.bin"
+		incbin	"startpos\ss4.bin"
+		incbin	"startpos\ss5.bin"
+		incbin	"startpos\ss6.bin"
+		even
+
 
 ; ---------------------------------------------------------------------------
 ; Subroutine to	load special stage layout
@@ -32467,7 +37646,165 @@ loc_1B730:
 ; ===========================================================================
 
 SS_MapIndex:
-		include	"_inc\Special Stage Mappings & VRAM Pointers.asm"
+; ---------------------------------------------------------------------------
+; Special stage	mappings and VRAM pointers
+; ---------------------------------------------------------------------------
+	dc.l Map_SSWalls	; address of mappings
+	dc.w $142		; VRAM setting
+	dc.l Map_SSWalls
+	dc.w $142
+	dc.l Map_SSWalls
+	dc.w $142
+	dc.l Map_SSWalls
+	dc.w $142
+	dc.l Map_SSWalls
+	dc.w $142
+	dc.l Map_SSWalls
+	dc.w $142
+	dc.l Map_SSWalls
+	dc.w $142
+	dc.l Map_SSWalls
+	dc.w $142
+	dc.l Map_SSWalls
+	dc.w $142
+	dc.l Map_SSWalls
+	dc.w $2142
+	dc.l Map_SSWalls
+	dc.w $2142
+	dc.l Map_SSWalls
+	dc.w $2142
+	dc.l Map_SSWalls
+	dc.w $2142
+	dc.l Map_SSWalls
+	dc.w $2142
+	dc.l Map_SSWalls
+	dc.w $2142
+	dc.l Map_SSWalls
+	dc.w $2142
+	dc.l Map_SSWalls
+	dc.w $2142
+	dc.l Map_SSWalls
+	dc.w $2142
+	dc.l Map_SSWalls
+	dc.w $4142
+	dc.l Map_SSWalls
+	dc.w $4142
+	dc.l Map_SSWalls
+	dc.w $4142
+	dc.l Map_SSWalls
+	dc.w $4142
+	dc.l Map_SSWalls
+	dc.w $4142
+	dc.l Map_SSWalls
+	dc.w $4142
+	dc.l Map_SSWalls
+	dc.w $4142
+	dc.l Map_SSWalls
+	dc.w $4142
+	dc.l Map_SSWalls
+	dc.w $4142
+	dc.l Map_SSWalls
+	dc.w $6142
+	dc.l Map_SSWalls
+	dc.w $6142
+	dc.l Map_SSWalls
+	dc.w $6142
+	dc.l Map_SSWalls
+	dc.w $6142
+	dc.l Map_SSWalls
+	dc.w $6142
+	dc.l Map_SSWalls
+	dc.w $6142
+	dc.l Map_SSWalls
+	dc.w $6142
+	dc.l Map_SSWalls
+	dc.w $6142
+	dc.l Map_SSWalls
+	dc.w $6142
+	dc.l Map_Bump
+	dc.w $23B
+	dc.l Map_SS_R
+	dc.w $570
+	dc.l Map_SS_R
+	dc.w $251
+	dc.l Map_SS_R
+	dc.w $370
+	dc.l Map_SS_Up
+	dc.w $263
+	dc.l Map_SS_Down
+	dc.w $263
+	dc.l Map_SS_R
+	dc.w $22F0
+	dc.l Map_SS_Glass
+	dc.w $470
+	dc.l Map_SS_Glass
+	dc.w $5F0
+	dc.l Map_SS_Glass
+	dc.w $65F0
+	dc.l Map_SS_Glass
+	dc.w $25F0
+	dc.l Map_SS_Glass
+	dc.w $45F0
+	dc.l Map_SS_R
+	dc.w $2F0
+	dc.l Map_Bump+$1000000	; add frame no.	* $1000000
+	dc.w $23B
+	dc.l Map_Bump+$2000000
+	dc.w $23B
+	dc.l Map_SS_R
+	dc.w $797
+	dc.l Map_SS_R
+	dc.w $7A0
+	dc.l Map_SS_R
+	dc.w $7A9
+	dc.l Map_SS_R
+	dc.w $797
+	dc.l Map_SS_R
+	dc.w $7A0
+	dc.l Map_SS_R
+	dc.w $7A9
+	dc.l Map_Ring
+	dc.w $27B2
+	dc.l Map_SS_Chaos3
+	dc.w $770
+	dc.l Map_SS_Chaos3
+	dc.w $2770
+	dc.l Map_SS_Chaos3
+	dc.w $4770
+	dc.l Map_SS_Chaos3
+	dc.w $6770
+	dc.l Map_SS_Chaos1
+	dc.w $770
+	dc.l Map_SS_Chaos2
+	dc.w $770
+	dc.l Map_SS_R
+	dc.w $4F0
+	dc.l Map_Ring+$4000000
+	dc.w $27B2
+	dc.l Map_Ring+$5000000
+	dc.w $27B2
+	dc.l Map_Ring+$6000000
+	dc.w $27B2
+	dc.l Map_Ring+$7000000
+	dc.w $27B2
+	dc.l Map_SS_Glass
+	dc.w $23F0
+	dc.l Map_SS_Glass+$1000000
+	dc.w $23F0
+	dc.l Map_SS_Glass+$2000000
+	dc.w $23F0
+	dc.l Map_SS_Glass+$3000000
+	dc.w $23F0
+	dc.l Map_SS_R+$2000000
+	dc.w $4F0
+	dc.l Map_SS_Glass
+	dc.w $5F0
+	dc.l Map_SS_Glass
+	dc.w $65F0
+	dc.l Map_SS_Glass
+	dc.w $25F0
+	dc.l Map_SS_Glass
+	dc.w $45F0
 
 Map_SS_R:	include	"_maps\SS R Block.asm"
 Map_SS_Glass:	include	"_maps\SS Glass Block.asm"
@@ -33210,7 +38547,596 @@ Obj09_NoGlass:
 Obj10:
 		rts
 
-		include	"_inc\AnimateLevelGfx.asm"
+; ---------------------------------------------------------------------------
+; Subroutine to	animate	level graphics
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+AnimateLevelGfx:
+		tst.w	(f_pause).w	; is the game paused?
+		bne.s	@ispaused	; if yes, branch
+		lea	(vdp_data_port).l,a6
+		bsr.w	AniArt_GiantRing
+		moveq	#0,d0
+		move.b	(v_zone).w,d0
+		add.w	d0,d0
+		move.w	AniArt_Index(pc,d0.w),d0
+		jmp	AniArt_Index(pc,d0.w)
+
+	@ispaused:
+		rts
+
+; ===========================================================================
+AniArt_Index:	dc.w AniArt_GHZ-AniArt_Index, AniArt_none-AniArt_Index
+		dc.w AniArt_MZ-AniArt_Index, AniArt_none-AniArt_Index
+		dc.w AniArt_none-AniArt_Index, AniArt_SBZ-AniArt_Index
+		zonewarning AniArt_Index,2
+		dc.w AniArt_Ending-AniArt_Index
+; ===========================================================================
+; ---------------------------------------------------------------------------
+; Animated pattern routine - Green Hill
+; ---------------------------------------------------------------------------
+
+AniArt_GHZ:
+
+AniArt_GHZ_Waterfall:
+
+@size:		equ 8	; number of tiles per frame
+
+		subq.b	#1,(v_lani0_time).w ; decrement timer
+		bpl.s	AniArt_GHZ_Bigflower ; branch if not 0
+
+		move.b	#5,(v_lani0_time).w ; time to display each frame
+		lea	(Art_GhzWater).l,a1 ; load waterfall patterns
+		move.b	(v_lani0_frame).w,d0
+		addq.b	#1,(v_lani0_frame).w ; increment frame counter
+		andi.w	#1,d0		; there are only 2 frames
+		beq.s	@isframe0	; branch if frame 0
+		lea	@size*$20(a1),a1 ; use graphics for frame 1
+
+	@isframe0:
+		locVRAM	$6F00		; VRAM address
+		move.w	#@size-1,d1	; number of 8x8	tiles
+		bra.w	LoadTiles
+; ===========================================================================
+
+AniArt_GHZ_Bigflower:
+
+@size:		equ 16	; number of tiles per frame
+
+		subq.b	#1,(v_lani1_time).w
+		bpl.s	AniArt_GHZ_Smallflower
+
+		move.b	#$F,(v_lani1_time).w
+		lea	(Art_GhzFlower1).l,a1 ;	load big flower	patterns
+		move.b	(v_lani1_frame).w,d0
+		addq.b	#1,(v_lani1_frame).w
+		andi.w	#1,d0
+		beq.s	@isframe0
+		lea	@size*$20(a1),a1
+
+	@isframe0:
+		locVRAM	$6B80
+		move.w	#@size-1,d1
+		bra.w	LoadTiles
+; ===========================================================================
+
+AniArt_GHZ_Smallflower:
+
+@size:		equ 12	; number of tiles per frame
+
+		subq.b	#1,(v_lani2_time).w
+		bpl.s	@end
+
+		move.b	#7,(v_lani2_time).w
+		move.b	(v_lani2_frame).w,d0
+		addq.b	#1,(v_lani2_frame).w ; increment frame counter
+		andi.w	#3,d0		; there are 4 frames
+		move.b	@sequence(pc,d0.w),d0
+		btst	#0,d0		; is frame 0 or 2? (actual frame, not frame counter)
+		bne.s	@isframe1	; if not, branch
+		move.b	#$7F,(v_lani2_time).w ; set longer duration for frames 0 and 2
+
+	@isframe1:
+		lsl.w	#7,d0		; multiply frame num by $80
+		move.w	d0,d1
+		add.w	d0,d0
+		add.w	d1,d0		; multiply that by 3 (i.e. frame num times 12 * $20)
+		locVRAM	$6D80
+		lea	(Art_GhzFlower2).l,a1 ;	load small flower patterns
+		lea	(a1,d0.w),a1	; jump to appropriate tile
+		move.w	#@size-1,d1
+		bsr.w	LoadTiles
+
+@end:
+		rts
+
+@sequence:	dc.b 0,	1, 2, 1
+; ===========================================================================
+; ---------------------------------------------------------------------------
+; Animated pattern routine - Marble
+; ---------------------------------------------------------------------------
+
+AniArt_MZ:
+
+AniArt_MZ_Lava:
+
+@size:		equ 8	; number of tiles per frame
+
+		subq.b	#1,(v_lani0_time).w ; decrement timer
+		bpl.s	AniArt_MZ_Magma	; branch if not 0
+
+		move.b	#$13,(v_lani0_time).w ; time to display each frame
+		lea	(Art_MzLava1).l,a1 ; load lava surface patterns
+		moveq	#0,d0
+		move.b	(v_lani0_frame).w,d0
+		addq.b	#1,d0		; increment frame counter
+		cmpi.b	#3,d0		; there are 3 frames
+		bne.s	@frame01or2	; branch if frame 0, 1 or 2
+		moveq	#0,d0
+
+	@frame01or2:
+		move.b	d0,(v_lani0_frame).w
+		mulu.w	#@size*$20,d0
+		adda.w	d0,a1		; jump to appropriate tile
+		locVRAM	$5C40
+		move.w	#@size-1,d1
+		bsr.w	LoadTiles
+
+AniArt_MZ_Magma:
+		subq.b	#1,(v_lani1_time).w ; decrement timer
+		bpl.s	AniArt_MZ_Torch	; branch if not 0
+
+		move.b	#1,(v_lani1_time).w ; time between each gfx change
+		moveq	#0,d0
+		move.b	(v_lani0_frame).w,d0 ; get surface lava frame number
+		lea	(Art_MzLava2).l,a4 ; load magma gfx
+		ror.w	#7,d0		; multiply frame num by $200
+		adda.w	d0,a4		; jump to appropriate tile
+		locVRAM	$5A40
+		moveq	#0,d3
+		move.b	(v_lani1_frame).w,d3
+		addq.b	#1,(v_lani1_frame).w ; increment frame counter (unused)
+		move.b	(v_oscillate+$A).w,d3 ; get oscillating value
+		move.w	#3,d2
+
+	@loop:
+		move.w	d3,d0
+		add.w	d0,d0
+		andi.w	#$1E,d0
+		lea	(AniArt_MZextra).l,a3
+		move.w	(a3,d0.w),d0
+		lea	(a3,d0.w),a3
+		movea.l	a4,a1
+		move.w	#$1F,d1
+		jsr	(a3)
+		addq.w	#4,d3
+		dbf	d2,@loop
+		rts
+; ===========================================================================
+
+AniArt_MZ_Torch:
+
+@size:		equ 6	; number of tiles per frame
+
+		subq.b	#1,(v_lani2_time).w ; decrement timer
+		bpl.w	@end		; branch if not 0
+
+		move.b	#7,(v_lani2_time).w ; time to display each frame
+		lea	(Art_MzTorch).l,a1 ; load torch	patterns
+		moveq	#0,d0
+		move.b	(v_lani3_frame).w,d0
+		addq.b	#1,(v_lani3_frame).w ; increment frame counter
+		andi.b	#3,(v_lani3_frame).w ; there are 3 frames
+		mulu.w	#@size*$20,d0
+		adda.w	d0,a1		; jump to appropriate tile
+		locVRAM	$5E40
+		move.w	#@size-1,d1
+		bra.w	LoadTiles
+
+@end:
+		rts
+; ===========================================================================
+; ---------------------------------------------------------------------------
+; Animated pattern routine - Scrap Brain
+; ---------------------------------------------------------------------------
+
+AniArt_SBZ:
+
+@size:		equ 12	; number of tiles per frame
+
+		tst.b	(v_lani2_frame).w
+		beq.s	@smokepuff	; branch if counter hits 0
+
+		subq.b	#1,(v_lani2_frame).w ; decrement counter
+		bra.s	@chk_smokepuff2
+; ===========================================================================
+
+@smokepuff:
+		subq.b	#1,(v_lani0_time).w ; decrement timer
+		bpl.s	@chk_smokepuff2 ; branch if not 0
+
+		move.b	#7,(v_lani0_time).w ; time to display each frame
+		lea	(Art_SbzSmoke).l,a1 ; load smoke patterns
+		locVRAM	$8900
+		move.b	(v_lani0_frame).w,d0
+		addq.b	#1,(v_lani0_frame).w ; increment frame counter
+		andi.w	#7,d0
+		beq.s	@untilnextpuff	; branch if frame 0
+		subq.w	#1,d0
+		mulu.w	#@size*$20,d0
+		lea	(a1,d0.w),a1
+		move.w	#@size-1,d1
+		bra.w	LoadTiles
+; ===========================================================================
+
+@untilnextpuff:
+		move.b	#180,(v_lani2_frame).w ; time between smoke puffs (3 seconds)
+
+@clearsky:
+		move.w	#(@size/2)-1,d1
+		bsr.w	LoadTiles
+		lea	(Art_SbzSmoke).l,a1
+		move.w	#(@size/2)-1,d1
+		bra.w	LoadTiles	; load blank tiles for no smoke puff
+; ===========================================================================
+
+@chk_smokepuff2:
+		tst.b	(v_lani2_time).w
+		beq.s	@smokepuff2	; branch if counter hits 0
+
+		subq.b	#1,(v_lani2_time).w ; decrement counter
+		bra.s	@end
+; ===========================================================================
+
+@smokepuff2:
+		subq.b	#1,(v_lani1_time).w ; decrement timer
+		bpl.s	@end		; branch if not 0
+
+		move.b	#7,(v_lani1_time).w ; time to display each frame
+		lea	(Art_SbzSmoke).l,a1 ; load smoke patterns
+		locVRAM	$8A80
+		move.b	(v_lani1_frame).w,d0
+		addq.b	#1,(v_lani1_frame).w ; increment frame counter
+		andi.w	#7,d0
+		beq.s	@untilnextpuff2	; branch if frame 0
+		subq.w	#1,d0
+		mulu.w	#@size*$20,d0
+		lea	(a1,d0.w),a1
+		move.w	#@size-1,d1
+		bra.w	LoadTiles
+; ===========================================================================
+
+@untilnextpuff2:
+		move.b	#120,(v_lani2_time).w ; time between smoke puffs (2 seconds)
+		bra.s	@clearsky
+; ===========================================================================
+
+@end:
+		rts
+; ===========================================================================
+; ---------------------------------------------------------------------------
+; Animated pattern routine - ending sequence
+; ---------------------------------------------------------------------------
+
+AniArt_Ending:
+
+AniArt_Ending_BigFlower:
+
+@size:		equ 16	; number of tiles per frame
+
+		subq.b	#1,(v_lani1_time).w ; decrement timer
+		bpl.s	AniArt_Ending_SmallFlower ; branch if not 0
+
+		move.b	#7,(v_lani1_time).w
+		lea	(Art_GhzFlower1).l,a1 ;	load big flower	patterns
+		lea	($FFFF9400).w,a2 ; load 2nd big flower from RAM
+		move.b	(v_lani1_frame).w,d0
+		addq.b	#1,(v_lani1_frame).w ; increment frame counter
+		andi.w	#1,d0		; only 2 frames
+		beq.s	@isframe0	; branch if frame 0
+		lea	@size*$20(a1),a1
+		lea	@size*$20(a2),a2
+
+	@isframe0:
+		locVRAM	$6B80
+		move.w	#@size-1,d1
+		bsr.w	LoadTiles
+		movea.l	a2,a1
+		locVRAM	$7200
+		move.w	#@size-1,d1
+		bra.w	LoadTiles
+; ===========================================================================
+
+AniArt_Ending_SmallFlower:
+
+@size:		equ 12	; number of tiles per frame
+
+		subq.b	#1,(v_lani2_time).w ; decrement timer
+		bpl.s	AniArt_Ending_Flower3 ; branch if not 0
+
+		move.b	#7,(v_lani2_time).w
+		move.b	(v_lani2_frame).w,d0
+		addq.b	#1,(v_lani2_frame).w ; increment frame counter
+		andi.w	#7,d0		; max 8 frames
+		move.b	@sequence(pc,d0.w),d0 ; get actual frame num from sequence data
+		lsl.w	#7,d0		; multiply by $80
+		move.w	d0,d1
+		add.w	d0,d0
+		add.w	d1,d0		; multiply by 3
+		locVRAM	$6D80
+		lea	(Art_GhzFlower2).l,a1 ;	load small flower patterns
+		lea	(a1,d0.w),a1	; jump to appropriate tile
+		move.w	#@size-1,d1
+		bra.w	LoadTiles
+; ===========================================================================
+@sequence:	dc.b 0,	0, 0, 1, 2, 2, 2, 1
+; ===========================================================================
+
+AniArt_Ending_Flower3:
+
+@size:		equ 16	; number of tiles per frame
+
+		subq.b	#1,(v_lani4_time).w ; decrement timer
+		bpl.s	AniArt_Ending_Flower4 ; branch if not 0
+
+		move.b	#$E,(v_lani4_time).w
+		move.b	(v_lani4_frame).w,d0
+		addq.b	#1,(v_lani4_frame).w ; increment frame counter
+		andi.w	#3,d0		; max 4 frames
+		move.b	AniArt_Ending_Flower3_sequence(pc,d0.w),d0 ; get actual frame num from sequence data
+		lsl.w	#8,d0		; multiply by $100
+		add.w	d0,d0		; multiply by 2
+		locVRAM	$7000
+		lea	($FFFF9800).w,a1 ; load	special	flower patterns	(from RAM)
+		lea	(a1,d0.w),a1	; jump to appropriate tile
+		move.w	#@size-1,d1
+		bra.w	LoadTiles
+; ===========================================================================
+AniArt_Ending_Flower3_sequence:	dc.b 0,	1, 2, 1
+; ===========================================================================
+
+AniArt_Ending_Flower4:
+
+@size:		equ 16	; number of tiles per frame
+
+		subq.b	#1,(v_lani5_time).w ; decrement timer
+		bpl.s	@end		; branch if not 0
+
+		move.b	#$B,(v_lani5_time).w
+		move.b	(v_lani5_frame).w,d0
+		addq.b	#1,(v_lani5_frame).w ; increment frame counter
+		andi.w	#3,d0
+		move.b	AniArt_Ending_Flower3_sequence(pc,d0.w),d0 ; get actual frame num from sequence data
+		lsl.w	#8,d0		; multiply by $100
+		add.w	d0,d0		; multiply by 2
+		locVRAM	$6800
+		lea	($FFFF9E00).w,a1 ; load	special	flower patterns	(from RAM)
+		lea	(a1,d0.w),a1	; jump to appropriate tile
+		move.w	#@size-1,d1
+		bra.w	LoadTiles
+; ===========================================================================
+
+@end:
+		rts
+; ===========================================================================
+
+AniArt_none:
+		rts
+
+; ---------------------------------------------------------------------------
+; Subroutine to	transfer graphics to VRAM
+
+; input:
+;	a1 = source address
+;	a6 = vdp_data_port ($C00000)
+;	d1 = number of tiles to load (minus one)
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+LoadTiles:
+		move.l	(a1)+,(a6)
+		move.l	(a1)+,(a6)
+		move.l	(a1)+,(a6)
+		move.l	(a1)+,(a6)
+		move.l	(a1)+,(a6)
+		move.l	(a1)+,(a6)
+		move.l	(a1)+,(a6)
+		move.l	(a1)+,(a6)
+		dbf	d1,LoadTiles
+		rts
+; End of function LoadTiles
+
+; ===========================================================================
+; ---------------------------------------------------------------------------
+; Animated pattern routine - more Marble Zone
+; ---------------------------------------------------------------------------
+AniArt_MZextra:	dc.w loc_1C3EE-AniArt_MZextra, loc_1C3FA-AniArt_MZextra
+		dc.w loc_1C410-AniArt_MZextra, loc_1C41E-AniArt_MZextra
+		dc.w loc_1C434-AniArt_MZextra, loc_1C442-AniArt_MZextra
+		dc.w loc_1C458-AniArt_MZextra, loc_1C466-AniArt_MZextra
+		dc.w loc_1C47C-AniArt_MZextra, loc_1C48A-AniArt_MZextra
+		dc.w loc_1C4A0-AniArt_MZextra, loc_1C4AE-AniArt_MZextra
+		dc.w loc_1C4C4-AniArt_MZextra, loc_1C4D2-AniArt_MZextra
+		dc.w loc_1C4E8-AniArt_MZextra, loc_1C4FA-AniArt_MZextra
+; ===========================================================================
+
+loc_1C3EE:
+		move.l	(a1),(a6)
+		lea	$10(a1),a1
+		dbf	d1,loc_1C3EE
+		rts
+; ===========================================================================
+
+loc_1C3FA:
+		move.l	2(a1),d0
+		move.b	1(a1),d0
+		ror.l	#8,d0
+		move.l	d0,(a6)
+		lea	$10(a1),a1
+		dbf	d1,loc_1C3FA
+		rts
+; ===========================================================================
+
+loc_1C410:
+		move.l	2(a1),(a6)
+		lea	$10(a1),a1
+		dbf	d1,loc_1C410
+		rts
+; ===========================================================================
+
+loc_1C41E:
+		move.l	4(a1),d0
+		move.b	3(a1),d0
+		ror.l	#8,d0
+		move.l	d0,(a6)
+		lea	$10(a1),a1
+		dbf	d1,loc_1C41E
+		rts
+; ===========================================================================
+
+loc_1C434:
+		move.l	4(a1),(a6)
+		lea	$10(a1),a1
+		dbf	d1,loc_1C434
+		rts
+; ===========================================================================
+
+loc_1C442:
+		move.l	6(a1),d0
+		move.b	5(a1),d0
+		ror.l	#8,d0
+		move.l	d0,(a6)
+		lea	$10(a1),a1
+		dbf	d1,loc_1C442
+		rts
+; ===========================================================================
+
+loc_1C458:
+		move.l	6(a1),(a6)
+		lea	$10(a1),a1
+		dbf	d1,loc_1C458
+		rts
+; ===========================================================================
+
+loc_1C466:
+		move.l	8(a1),d0
+		move.b	7(a1),d0
+		ror.l	#8,d0
+		move.l	d0,(a6)
+		lea	$10(a1),a1
+		dbf	d1,loc_1C466
+		rts
+; ===========================================================================
+
+loc_1C47C:
+		move.l	8(a1),(a6)
+		lea	$10(a1),a1
+		dbf	d1,loc_1C47C
+		rts
+; ===========================================================================
+
+loc_1C48A:
+		move.l	$A(a1),d0
+		move.b	9(a1),d0
+		ror.l	#8,d0
+		move.l	d0,(a6)
+		lea	$10(a1),a1
+		dbf	d1,loc_1C48A
+		rts
+; ===========================================================================
+
+loc_1C4A0:
+		move.l	$A(a1),(a6)
+		lea	$10(a1),a1
+		dbf	d1,loc_1C4A0
+		rts
+; ===========================================================================
+
+loc_1C4AE:
+		move.l	$C(a1),d0
+		move.b	$B(a1),d0
+		ror.l	#8,d0
+		move.l	d0,(a6)
+		lea	$10(a1),a1
+		dbf	d1,loc_1C4AE
+		rts
+; ===========================================================================
+
+loc_1C4C4:
+		move.l	$C(a1),(a6)
+		lea	$10(a1),a1
+		dbf	d1,loc_1C4C4
+		rts
+; ===========================================================================
+
+loc_1C4D2:
+		move.l	$C(a1),d0
+		rol.l	#8,d0
+		move.b	0(a1),d0
+		move.l	d0,(a6)
+		lea	$10(a1),a1
+		dbf	d1,loc_1C4D2
+		rts
+; ===========================================================================
+
+loc_1C4E8:
+		move.w	$E(a1),(a6)
+		move.w	0(a1),(a6)
+		lea	$10(a1),a1
+		dbf	d1,loc_1C4E8
+		rts
+; ===========================================================================
+
+loc_1C4FA:
+		move.l	0(a1),d0
+		move.b	$F(a1),d0
+		ror.l	#8,d0
+		move.l	d0,(a6)
+		lea	$10(a1),a1
+		dbf	d1,loc_1C4FA
+		rts
+
+; ---------------------------------------------------------------------------
+; Animated pattern routine - giant ring
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+AniArt_GiantRing:
+
+@size:		equ 14
+
+		tst.w	(v_gfxbigring).w	; Is there any of the art left to load?
+		bne.s	@loadTiles		; If so, get to work
+		rts
+; ===========================================================================
+; loc_1C518:
+@loadTiles:
+		subi.w	#@size*$20,(v_gfxbigring).w	; Count-down the 14 tiles we're going to load now
+		lea	(Art_BigRing).l,a1 ; load giant	ring patterns
+		moveq	#0,d0
+		move.w	(v_gfxbigring).w,d0
+		lea	(a1,d0.w),a1
+		; Turn VRAM address into VDP command
+		addi.w	#$8000,d0
+		lsl.l	#2,d0
+		lsr.w	#2,d0
+		ori.w	#$4000,d0
+		swap	d0
+		; Send VDP command (write to VRAM at address contained in v_gfxbigring)
+		move.l	d0,4(a6)
+
+		move.w	#@size-1,d1
+		bra.w	LoadTiles
+
+; End of function AniArt_GiantRing
+
 
 
 ; ---------------------------------------------------------------------------
@@ -33311,7 +39237,325 @@ AddPoints:
 		rts	
 ; End of function AddPoints
 
-		include	"_inc\HUD_Update.asm"
+; ---------------------------------------------------------------------------
+; Subroutine to	update the HUD
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+HUD_Update:
+		tst.w	(f_debugmode).w	; is debug mode	on?
+		bne.w	HudDebug	; if yes, branch
+		tst.b	(f_scorecount).w ; does the score need updating?
+		beq.s	@chkrings	; if not, branch
+
+		clr.b	(f_scorecount).w
+		locVRAM	$DC80,d0	; set VRAM address
+		move.l	(v_score).w,d1	; load score
+		bsr.w	Hud_Score
+
+	@chkrings:
+		tst.b	(f_ringcount).w	; does the ring	counter	need updating?
+		beq.s	@chktime	; if not, branch
+		bpl.s	@notzero
+		bsr.w	Hud_LoadZero	; reset rings to 0 if Sonic is hit
+
+	@notzero:
+		clr.b	(f_ringcount).w
+		locVRAM	$DF40,d0	; set VRAM address
+		moveq	#0,d1
+		move.w	(v_rings).w,d1	; load number of rings
+		bsr.w	Hud_Rings
+
+	@chktime:
+		tst.b	(f_timecount).w	; does the time	need updating?
+		beq.s	@chklives	; if not, branch
+		tst.w	(f_pause).w	; is the game paused?
+		bne.s	@chklives	; if yes, branch
+		lea	(v_time).w,a1
+		cmpi.l	#(9*$10000)+(59*$100)+59,(a1)+ ; is the time 9:59:59?
+		beq.s	TimeOver	; if yes, branch
+
+		addq.b	#1,-(a1)	; increment 1/60s counter
+		cmpi.b	#60,(a1)	; check if passed 60
+		bcs.s	@chklives
+		move.b	#0,(a1)
+		addq.b	#1,-(a1)	; increment second counter
+		cmpi.b	#60,(a1)	; check if passed 60
+		bcs.s	@updatetime
+		move.b	#0,(a1)
+		addq.b	#1,-(a1)	; increment minute counter
+		cmpi.b	#9,(a1)		; check if passed 9
+		bcs.s	@updatetime
+		move.b	#9,(a1)		; keep as 9
+
+	@updatetime:
+		locVRAM	$DE40,d0
+		moveq	#0,d1
+		move.b	(v_timemin).w,d1 ; load	minutes
+		bsr.w	Hud_Mins
+		locVRAM	$DEC0,d0
+		moveq	#0,d1
+		move.b	(v_timesec).w,d1 ; load	seconds
+		bsr.w	Hud_Secs
+
+	@chklives:
+		tst.b	(f_lifecount).w ; does the lives counter need updating?
+		beq.s	@chkbonus	; if not, branch
+		clr.b	(f_lifecount).w
+		bsr.w	Hud_Lives
+
+	@chkbonus:
+		tst.b	(f_endactbonus).w ; do time/ring bonus counters need updating?
+		beq.s	@finish		; if not, branch
+		clr.b	(f_endactbonus).w
+		locVRAM	$AE00
+		moveq	#0,d1
+		move.w	(v_timebonus).w,d1 ; load time bonus
+		bsr.w	Hud_TimeRingBonus
+		moveq	#0,d1
+		move.w	(v_ringbonus).w,d1 ; load ring bonus
+		bsr.w	Hud_TimeRingBonus
+
+	@finish:
+		rts
+; ===========================================================================
+
+TimeOver:
+		clr.b	(f_timecount).w
+		lea	(v_player).w,a0
+		movea.l	a0,a2
+		bsr.w	KillSonic
+		move.b	#1,(f_timeover).w
+		rts
+; ===========================================================================
+
+HudDebug:
+		bsr.w	HudDb_XY
+		tst.b	(f_ringcount).w	; does the ring	counter	need updating?
+		beq.s	@objcounter	; if not, branch
+		bpl.s	@notzero
+		bsr.w	Hud_LoadZero	; reset rings to 0 if Sonic is hit
+
+	@notzero:
+		clr.b	(f_ringcount).w
+		locVRAM	$DF40,d0	; set VRAM address
+		moveq	#0,d1
+		move.w	(v_rings).w,d1	; load number of rings
+		bsr.w	Hud_Rings
+
+	@objcounter:
+		locVRAM	$DEC0,d0	; set VRAM address
+		moveq	#0,d1
+		move.b	(v_spritecount).w,d1 ; load "number of objects" counter
+		bsr.w	Hud_Secs
+		tst.b	(f_lifecount).w ; does the lives counter need updating?
+		beq.s	@chkbonus	; if not, branch
+		clr.b	(f_lifecount).w
+		bsr.w	Hud_Lives
+
+	@chkbonus:
+		tst.b	(f_endactbonus).w ; does the ring/time bonus counter need updating?
+		beq.s	@finish		; if not, branch
+		clr.b	(f_endactbonus).w
+		locVRAM	$AE00		; set VRAM address
+		moveq	#0,d1
+		move.w	(v_timebonus).w,d1 ; load time bonus
+		bsr.w	Hud_TimeRingBonus
+		moveq	#0,d1
+		move.w	(v_ringbonus).w,d1 ; load ring bonus
+		bsr.w	Hud_TimeRingBonus
+
+	@finish:
+		rts
+; End of function HUD_Update
+
+; ---------------------------------------------------------------------------
+; Subroutine to	load "0" on the	HUD
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+Hud_LoadZero:
+		locVRAM	$DF40
+		lea	Hud_TilesZero(pc),a2
+		move.w	#2,d2
+		bra.s	loc_1C83E
+; End of function Hud_LoadZero
+
+; ---------------------------------------------------------------------------
+; Subroutine to	load uncompressed HUD patterns ("E", "0", colon)
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+Hud_Base:
+		lea	($C00000).l,a6
+		bsr.w	Hud_Lives
+		locVRAM	$DC40
+		lea	Hud_TilesBase(pc),a2
+		move.w	#$E,d2
+
+loc_1C83E:
+		lea	Art_Hud(pc),a1
+
+loc_1C842:
+		move.w	#$F,d1
+		move.b	(a2)+,d0
+		bmi.s	loc_1C85E
+		ext.w	d0
+		lsl.w	#5,d0
+		lea	(a1,d0.w),a3
+
+loc_1C852:
+		move.l	(a3)+,(a6)
+		dbf	d1,loc_1C852
+
+loc_1C858:
+		dbf	d2,loc_1C842
+
+		rts
+; ===========================================================================
+
+loc_1C85E:
+		move.l	#0,(a6)
+		dbf	d1,loc_1C85E
+
+		bra.s	loc_1C858
+; End of function Hud_Base
+
+; ===========================================================================
+Hud_TilesBase:	dc.b $16, $FF, $FF, $FF, $FF, $FF, $FF,	0, 0, $14, 0, 0
+Hud_TilesZero:	dc.b $FF, $FF, 0, 0
+; ---------------------------------------------------------------------------
+; Subroutine to	load debug mode	numbers	patterns
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+HudDb_XY:
+		locVRAM	$DC40		; set VRAM address
+		move.w	(v_screenposx).w,d1 ; load camera x-position
+		swap	d1
+		move.w	(v_player+obX).w,d1 ; load Sonic's x-position
+		bsr.s	HudDb_XY2
+		move.w	(v_screenposy).w,d1 ; load camera y-position
+		swap	d1
+		move.w	(v_player+obY).w,d1 ; load Sonic's y-position
+; End of function HudDb_XY
+
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+HudDb_XY2:
+		moveq	#7,d6
+		lea	(Art_Text).l,a1
+
+HudDb_XYLoop:
+		rol.w	#4,d1
+		move.w	d1,d2
+		andi.w	#$F,d2
+		cmpi.w	#$A,d2
+		bcs.s	loc_1C8B2
+		addq.w	#7,d2
+
+loc_1C8B2:
+		lsl.w	#5,d2
+		lea	(a1,d2.w),a3
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		swap	d1
+		dbf	d6,HudDb_XYLoop	; repeat 7 more	times
+
+		rts
+; End of function HudDb_XY2
+
+; ---------------------------------------------------------------------------
+; Subroutine to	load rings numbers patterns
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+Hud_Rings:
+		lea	(Hud_100).l,a2
+		moveq	#2,d6
+		bra.s	Hud_LoadArt
+; End of function Hud_Rings
+
+; ---------------------------------------------------------------------------
+; Subroutine to	load score numbers patterns
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+Hud_Score:
+		lea	(Hud_100000).l,a2
+		moveq	#5,d6
+
+Hud_LoadArt:
+		moveq	#0,d4
+		lea	Art_Hud(pc),a1
+
+Hud_ScoreLoop:
+		moveq	#0,d2
+		move.l	(a2)+,d3
+
+loc_1C8EC:
+		sub.l	d3,d1
+		bcs.s	loc_1C8F4
+		addq.w	#1,d2
+		bra.s	loc_1C8EC
+; ===========================================================================
+
+loc_1C8F4:
+		add.l	d3,d1
+		tst.w	d2
+		beq.s	loc_1C8FE
+		move.w	#1,d4
+
+loc_1C8FE:
+		tst.w	d4
+		beq.s	loc_1C92C
+		lsl.w	#6,d2
+		move.l	d0,4(a6)
+		lea	(a1,d2.w),a3
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+
+loc_1C92C:
+		addi.l	#$400000,d0
+		dbf	d6,Hud_ScoreLoop
+
+		rts
+
+; End of function Hud_Score
+
 
 ; ---------------------------------------------------------------------------
 ; Subroutine to	load countdown numbers on the continue screen
@@ -33366,7 +39610,220 @@ loc_1C962:
 
 ; ===========================================================================
 
-		include	"_inc\HUD (part 2).asm"
+; ---------------------------------------------------------------------------
+; HUD counter sizes
+; ---------------------------------------------------------------------------
+Hud_100000:	dc.l 100000
+Hud_10000:	dc.l 10000
+Hud_1000:	dc.l 1000
+Hud_100:	dc.l 100
+Hud_10:		dc.l 10
+Hud_1:		dc.l 1
+
+; ---------------------------------------------------------------------------
+; Subroutine to	load time numbers patterns
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+Hud_Mins:
+		lea	(Hud_1).l,a2
+		moveq	#0,d6
+		bra.s	loc_1C9BA
+; End of function Hud_Mins
+
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+Hud_Secs:
+		lea	(Hud_10).l,a2
+		moveq	#1,d6
+
+loc_1C9BA:
+		moveq	#0,d4
+		lea	Art_Hud(pc),a1
+
+Hud_TimeLoop:
+		moveq	#0,d2
+		move.l	(a2)+,d3
+
+loc_1C9C4:
+		sub.l	d3,d1
+		bcs.s	loc_1C9CC
+		addq.w	#1,d2
+		bra.s	loc_1C9C4
+; ===========================================================================
+
+loc_1C9CC:
+		add.l	d3,d1
+		tst.w	d2
+		beq.s	loc_1C9D6
+		move.w	#1,d4
+
+loc_1C9D6:
+		lsl.w	#6,d2
+		move.l	d0,4(a6)
+		lea	(a1,d2.w),a3
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		addi.l	#$400000,d0
+		dbf	d6,Hud_TimeLoop
+
+		rts
+; End of function Hud_Secs
+
+; ---------------------------------------------------------------------------
+; Subroutine to	load time/ring bonus numbers patterns
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+Hud_TimeRingBonus:
+		lea	(Hud_1000).l,a2
+		moveq	#3,d6
+		moveq	#0,d4
+		lea	Art_Hud(pc),a1
+
+Hud_BonusLoop:
+		moveq	#0,d2
+		move.l	(a2)+,d3
+
+loc_1CA1E:
+		sub.l	d3,d1
+		bcs.s	loc_1CA26
+		addq.w	#1,d2
+		bra.s	loc_1CA1E
+; ===========================================================================
+
+loc_1CA26:
+		add.l	d3,d1
+		tst.w	d2
+		beq.s	loc_1CA30
+		move.w	#1,d4
+
+loc_1CA30:
+		tst.w	d4
+		beq.s	Hud_ClrBonus
+		lsl.w	#6,d2
+		lea	(a1,d2.w),a3
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+
+loc_1CA5A:
+		dbf	d6,Hud_BonusLoop ; repeat 3 more times
+
+		rts
+; ===========================================================================
+
+Hud_ClrBonus:
+		moveq	#$F,d5
+
+Hud_ClrBonusLoop:
+		move.l	#0,(a6)
+		dbf	d5,Hud_ClrBonusLoop
+
+		bra.s	loc_1CA5A
+; End of function Hud_TimeRingBonus
+
+; ---------------------------------------------------------------------------
+; Subroutine to	load uncompressed lives	counter	patterns
+; ---------------------------------------------------------------------------
+
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
+
+Hud_Lives:
+		locVRAM	$FBA0,d0	; set VRAM address
+		moveq	#0,d1
+		move.b	(v_lives).w,d1	; load number of lives
+		lea	(Hud_10).l,a2
+		moveq	#1,d6
+		moveq	#0,d4
+		lea	Art_LivesNums(pc),a1
+
+Hud_LivesLoop:
+		move.l	d0,4(a6)
+		moveq	#0,d2
+		move.l	(a2)+,d3
+
+loc_1CA90:
+		sub.l	d3,d1
+		bcs.s	loc_1CA98
+		addq.w	#1,d2
+		bra.s	loc_1CA90
+; ===========================================================================
+
+loc_1CA98:
+		add.l	d3,d1
+		tst.w	d2
+		beq.s	loc_1CAA2
+		move.w	#1,d4
+
+loc_1CAA2:
+		tst.w	d4
+		beq.s	Hud_ClrLives
+
+loc_1CAA6:
+		lsl.w	#5,d2
+		lea	(a1,d2.w),a3
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+		move.l	(a3)+,(a6)
+
+loc_1CABC:
+		addi.l	#$400000,d0
+		dbf	d6,Hud_LivesLoop ; repeat 1 more time
+
+		rts
+; ===========================================================================
+
+Hud_ClrLives:
+		tst.w	d6
+		beq.s	loc_1CAA6
+		moveq	#7,d5
+
+Hud_ClrLivesLoop:
+		move.l	#0,(a6)
+		dbf	d5,Hud_ClrLivesLoop
+		bra.s	loc_1CABC
+; End of function Hud_Lives
+
 
 Art_Hud:	incbin	"artunc\HUD Numbers.bin" ; 8x16 pixel numbers on HUD
 		even
@@ -33591,9 +40048,665 @@ Debug_ShowItem:
 		rts
 ; End of function Debug_ShowItem
 
-		include	"_inc\DebugList.asm"
-		include	"_inc\LevelHeaders.asm"
-		include	"_inc\Pattern Load Cues.asm"
+; ---------------------------------------------------------------------------
+; Debug	mode item lists
+; ---------------------------------------------------------------------------
+DebugList:
+		dc.w @GHZ-DebugList
+		dc.w @LZ-DebugList
+		dc.w @MZ-DebugList
+		dc.w @SLZ-DebugList
+		dc.w @SYZ-DebugList
+		dc.w @SBZ-DebugList
+		zonewarning DebugList,2
+		dc.w @Ending-DebugList
+
+dbug:	macro map,object,subtype,frame,vram
+		dc.l map+(object<<24)
+		dc.b subtype,frame
+		dc.w vram
+		endm
+
+@GHZ:
+		dc.w (@GHZend-@GHZ-2)/8
+
+;		mappings	object		subtype	frame	VRAM setting
+		dbug 	Map_Ring,	id_Rings,	0,	0,	$27B2
+		dbug	Map_Monitor,	id_Monitor,	0,	0,	$680
+		dbug	Map_Crab,	id_Crabmeat,	0,	0,	$400
+		dbug	Map_Buzz,	id_BuzzBomber,	0,	0,	$444
+		dbug	Map_Chop,	id_Chopper,	0,	0,	$47B
+		dbug	Map_Spike,	id_Spikes,	0,	0,	$51B
+		dbug	Map_Plat_GHZ,	id_BasicPlatform, 0,	0,	$4000
+		dbug	Map_PRock,	id_PurpleRock,	0,	0,	$63D0
+		dbug	Map_Moto,	id_MotoBug,	0,	0,	$4F0
+		dbug	Map_Spring,	id_Springs,	0,	0,	$523
+		dbug	Map_Newt,	id_Newtron,	0,	0,	$249B
+		dbug	Map_Edge,	id_EdgeWalls,	0,	0,	$434C
+		dbug	Map_GBall,	id_Obj19,	0,	0,	$43AA
+		dbug	Map_Lamp,	id_Lamppost,	1,	0,	$7A0
+		dbug	Map_GRing,	id_GiantRing,	0,	0,	$2400
+		dbug	Map_Bonus,	id_HiddenBonus,	1,	1,	$84B6
+		@GHZend:
+
+@LZ:
+		dc.w (@LZend-@LZ-2)/8
+
+;		mappings	object		subtype	frame	VRAM setting
+		dbug	Map_Ring,	id_Rings,	0,	0,	$27B2
+		dbug	Map_Monitor,	id_Monitor,	0,	0,	$680
+		dbug	Map_Spring,	id_Springs,	0,	0,	$523
+		dbug	Map_Jaws,	id_Jaws,	8,	0,	$2486
+		dbug	Map_Burro,	id_Burrobot,	0,	2,	$84A6
+		dbug	Map_Harp,	id_Harpoon,	0,	0,	$3CC
+		dbug	Map_Harp,	id_Harpoon,	2,	3,	$3CC
+		dbug	Map_Push,	id_PushBlock,	0,	0,	$43DE
+		dbug	Map_But,	id_Button,	0,	0,	$513
+		dbug	Map_Spike,	id_Spikes,	0,	0,	$51B
+		dbug	Map_MBlockLZ,	id_MovingBlock,	4,	0,	$43BC
+		dbug	Map_LBlock,	id_LabyrinthBlock, 1,	0,	$43E6
+		dbug	Map_LBlock,	id_LabyrinthBlock, $13,	1,	$43E6
+		dbug	Map_LBlock,	id_LabyrinthBlock, 5,	0,	$43E6
+		dbug	Map_Gar,	id_Gargoyle,	0,	0,	$443E
+		dbug	Map_LBlock,	id_LabyrinthBlock, $27,	2,	$43E6
+		dbug	Map_LBlock,	id_LabyrinthBlock, $30,	3,	$43E6
+		dbug	Map_LConv,	id_LabyrinthConvey, $7F, 0,	$3F6
+		dbug	Map_Orb,	id_Orbinaut,	0,	0,	$467
+		dbug	Map_Bub,	id_Bubble,	$84,	$13,	$8348
+		dbug	Map_WFall,	id_Waterfall,	2,	2,	$C259
+		dbug	Map_WFall,	id_Waterfall,	9,	9,	$C259
+		dbug	Map_Pole,	id_Pole,	0,	0,	$43DE
+		dbug	Map_Flap,	id_FlapDoor,	2,	0,	$4328
+		dbug	Map_Lamp,	id_Lamppost,	1,	0,	$7A0
+		@LZend:
+
+@MZ:
+		dc.w (@MZend-@MZ-2)/8
+
+;		mappings	object		subtype	frame	VRAM setting
+		dbug	Map_Ring,	id_Rings,	0,	0,	$27B2
+		dbug	Map_Monitor,	id_Monitor,	0,	0,	$680
+		dbug	Map_Buzz,	id_BuzzBomber,	0,	0,	$444
+		dbug	Map_Spike,	id_Spikes,	0,	0,	$51B
+		dbug	Map_Spring,	id_Springs,	0,	0,	$523
+		dbug	Map_Fire,	id_LavaMaker,	0,	0,	$345
+		dbug	Map_Brick,	id_MarbleBrick,	0,	0,	$4000
+		dbug	Map_Geyser,	id_GeyserMaker,	0,	0,	$63A8
+		dbug	Map_LWall,	id_LavaWall,	0,	0,	$63A8
+		dbug	Map_Push,	id_PushBlock,	0,	0,	$42B8
+		dbug	Map_Yad,	id_Yadrin,	0,	0,	$247B
+		dbug	Map_Smab,	id_SmashBlock,	0,	0,	$42B8
+		dbug	Map_MBlock,	id_MovingBlock,	0,	0,	$2B8
+		dbug	Map_CFlo,	id_CollapseFloor, 0,	0,	$62B8
+		dbug	Map_LTag,	id_LavaTag,	0,	0,	$8680
+		dbug	Map_Bas,	id_Basaran,	0,	0,	$4B8
+		dbug	Map_Cat,	id_Caterkiller,	0,	0,	$24FF
+		dbug	Map_Lamp,	id_Lamppost,	1,	0,	$7A0
+		@MZend:
+
+@SLZ:
+		dc.w (@SLZend-@SLZ-2)/8
+
+;		mappings	object		subtype	frame	VRAM setting
+		dbug	Map_Ring,	id_Rings,	0,	0,	$27B2
+		dbug	Map_Monitor,	id_Monitor,	0,	0,	$680
+		dbug	Map_Elev,	id_Elevator,	0,	0,	$4000
+		dbug	Map_CFlo,	id_CollapseFloor, 0,	2,	$44E0
+		dbug	Map_Plat_SLZ,	id_BasicPlatform, 0,	0,	$4000
+		dbug	Map_Circ,	id_CirclingPlatform, 0,	0,	$4000
+		dbug	Map_Stair,	id_Staircase,	0,	0,	$4000
+		dbug	Map_Fan,	id_Fan,		0,	0,	$43A0
+		dbug	Map_Seesaw,	id_Seesaw,	0,	0,	$374
+		dbug	Map_Spring,	id_Springs,	0,	0,	$523
+		dbug	Map_Fire,	id_LavaMaker,	0,	0,	$480
+		dbug	Map_Scen,	id_Scenery,	0,	0,	$44D8
+		dbug	Map_Bomb,	id_Bomb,	0,	0,	$400
+		dbug	Map_Orb,	id_Orbinaut,	0,	0,	$2429
+		dbug	Map_Lamp,	id_Lamppost,	1,	0,	$7A0
+		@SLZend:
+
+@SYZ:
+		dc.w (@SYZend-@SYZ-2)/8
+
+;		mappings	object		subtype	frame	VRAM setting
+		dbug	Map_Ring,	id_Rings,	0,	0,	$27B2
+		dbug	Map_Monitor,	id_Monitor,	0,	0,	$680
+		dbug	Map_Spike,	id_Spikes,	0,	0,	$51B
+		dbug	Map_Spring,	id_Springs,	0,	0,	$523
+		dbug	Map_Roll,	id_Roller,	0,	0,	$4B8
+		dbug	Map_Light,	id_SpinningLight, 0,	0,	0
+		dbug	Map_Bump,	id_Bumper,	0,	0,	$380
+		dbug	Map_Crab,	id_Crabmeat,	0,	0,	$400
+		dbug	Map_Buzz,	id_BuzzBomber,	0,	0,	$444
+		dbug	Map_Yad,	id_Yadrin,	0,	0,	$247B
+		dbug	Map_Plat_SYZ,	id_BasicPlatform, 0,	0,	$4000
+		dbug	Map_FBlock,	id_FloatingBlock, 0,	0,	$4000
+		dbug	Map_But,	id_Button,	0,	0,	$513
+		dbug	Map_Cat,	id_Caterkiller,	0,	0,	$24FF
+		dbug	Map_Lamp,	id_Lamppost,	1,	0,	$7A0
+		@SYZend:
+
+@SBZ:
+		dc.w (@SBZend-@SBZ-2)/8
+
+;		mappings	object		subtype	frame	VRAM setting
+		dbug	Map_Ring,	id_Rings,	0,	0,	$27B2
+		dbug	Map_Monitor,	id_Monitor,	0,	0,	$680
+		dbug	Map_Bomb,	id_Bomb,	0,	0,	$400
+		dbug	Map_Orb,	id_Orbinaut,	0,	0,	$429
+		dbug	Map_Cat,	id_Caterkiller,	0,	0,	$22B0
+		dbug	Map_BBall,	id_SwingingPlatform, 7,	2,	$4391
+		dbug	Map_Disc,	id_RunningDisc,	$E0,	0,	$C344
+		dbug	Map_MBlock,	id_MovingBlock,	$28,	2,	$22C0
+		dbug	Map_But,	id_Button,	0,	0,	$513
+		dbug	Map_Trap,	id_SpinPlatform, 3,	0,	$4492
+		dbug	Map_Spin,	id_SpinPlatform, $83,	0,	$4DF
+		dbug	Map_Saw,	id_Saws,	2,	0,	$43B5
+		dbug	Map_CFlo,	id_CollapseFloor, 0,	0,	$43F5
+		dbug	Map_MBlock,	id_MovingBlock,	$39,	3,	$4460
+		dbug	Map_Stomp,	id_ScrapStomp,	0,	0,	$22C0
+		dbug	Map_ADoor,	id_AutoDoor,	0,	0,	$42E8
+		dbug	Map_Stomp,	id_ScrapStomp,	$13,	1,	$22C0
+		dbug	Map_Saw,	id_Saws,	1,	0,	$43B5
+		dbug	Map_Stomp,	id_ScrapStomp,	$24,	1,	$22C0
+		dbug	Map_Saw,	id_Saws,	4,	2,	$43B5
+		dbug	Map_Stomp,	id_ScrapStomp,	$34,	1,	$22C0
+		dbug	Map_VanP,	id_VanishPlatform, 0,	0,	$44C3
+		dbug	Map_Flame,	id_Flamethrower, $64,	0,	$83D9
+		dbug	Map_Flame,	id_Flamethrower, $64,	$B,	$83D9
+		dbug	Map_Elec,	id_Electro,	4,	0,	$47E
+		dbug	Map_Gird,	id_Girder,	0,	0,	$42F0
+		dbug	Map_Invis,	id_Invisibarrier, $11,	0,	$8680
+		dbug	Map_Hog,	id_BallHog,	4,	0,	$2302
+		dbug	Map_Lamp,	id_Lamppost,	1,	0,	$7A0
+		@SBZend:
+
+@Ending:
+		dc.w (@Endingend-@Ending-2)/8
+
+;		mappings	object		subtype	frame	VRAM setting
+		dbug	Map_Ring,	id_Rings,	0,	0,	$27B2
+		if Revision=0
+		dbug	Map_Bump,	id_Bumper,	0,	0,	$380
+		dbug	Map_Animal2,	id_Animals,	$A,	0,	$5A0
+		dbug	Map_Animal2,	id_Animals,	$B,	0,	$5A0
+		dbug	Map_Animal2,	id_Animals,	$C,	0,	$5A0
+		dbug	Map_Animal1,	id_Animals,	$D,	0,	$553
+		dbug	Map_Animal1,	id_Animals,	$E,	0,	$553
+		dbug	Map_Animal1,	id_Animals,	$F,	0,	$573
+		dbug	Map_Animal1,	id_Animals,	$10,	0,	$573
+		dbug	Map_Animal2,	id_Animals,	$11,	0,	$585
+		dbug	Map_Animal3,	id_Animals,	$12,	0,	$593
+		dbug	Map_Animal2,	id_Animals,	$13,	0,	$565
+		dbug	Map_Animal3,	id_Animals,	$14,	0,	$5B3
+		else
+		dbug	Map_Ring,	id_Rings,	0,	8,	$27B2
+		endc
+		@Endingend:
+
+		even
+
+
+; ---------------------------------------------------------------------------
+; Level Headers
+; ---------------------------------------------------------------------------
+
+LevelHeaders:
+
+lhead:	macro plc1,lvlgfx,plc2,sixteen,twofivesix,music,pal
+		dc.l (plc1<<24)+lvlgfx
+		dc.l (plc2<<24)+sixteen
+		dc.l twofivesix
+		dc.b 0, music, pal, pal
+		endm
+
+; 1st PLC, level gfx (unused), 2nd PLC, 16x16 data, 256x256 data,
+; music (unused), palette (unused), palette
+
+;		1st PLC				2nd PLC				256x256 data			palette
+;				level gfx*			16x16 data			music*
+
+		lhead	plcid_GHZ,	Nem_GHZ_2nd,	plcid_GHZ2,	Blk16_GHZ,	Blk256_GHZ,	bgm_GHZ,	palid_GHZ	; Green Hill
+		lhead	plcid_LZ,	Nem_LZ,		plcid_LZ2,	Blk16_LZ,	Blk256_LZ,	bgm_LZ,		palid_LZ	; Labyrinth
+		lhead	plcid_MZ,	Nem_MZ,		plcid_MZ2,	Blk16_MZ,	Blk256_MZ,	bgm_MZ,		palid_MZ	; Marble
+		lhead	plcid_SLZ,	Nem_SLZ,	plcid_SLZ2,	Blk16_SLZ,	Blk256_SLZ,	bgm_SLZ,	palid_SLZ	; Star Light
+		lhead	plcid_SYZ,	Nem_SYZ,	plcid_SYZ2,	Blk16_SYZ,	Blk256_SYZ,	bgm_SYZ,	palid_SYZ	; Spring Yard
+		lhead	plcid_SBZ,	Nem_SBZ,	plcid_SBZ2,	Blk16_SBZ,	Blk256_SBZ,	bgm_SBZ,	palid_SBZ1	; Scrap Brain
+		zonewarning LevelHeaders,$10
+		lhead	0,		Nem_GHZ_2nd,	0,		Blk16_GHZ,	Blk256_GHZ,	bgm_SBZ,	palid_Ending	; Ending
+		even
+
+;	* music and level gfx are actually set elsewhere, so these values are useless
+
+; ---------------------------------------------------------------------------
+; Pattern load cues
+; ---------------------------------------------------------------------------
+ArtLoadCues:
+
+ptr_PLC_Main:		dc.w PLC_Main-ArtLoadCues
+ptr_PLC_Main2:		dc.w PLC_Main2-ArtLoadCues
+ptr_PLC_Explode:	dc.w PLC_Explode-ArtLoadCues
+ptr_PLC_GameOver:	dc.w PLC_GameOver-ArtLoadCues
+PLC_Levels:
+ptr_PLC_GHZ:		dc.w PLC_GHZ-ArtLoadCues
+ptr_PLC_GHZ2:		dc.w PLC_GHZ2-ArtLoadCues
+ptr_PLC_LZ:		dc.w PLC_LZ-ArtLoadCues
+ptr_PLC_LZ2:		dc.w PLC_LZ2-ArtLoadCues
+ptr_PLC_MZ:		dc.w PLC_MZ-ArtLoadCues
+ptr_PLC_MZ2:		dc.w PLC_MZ2-ArtLoadCues
+ptr_PLC_SLZ:		dc.w PLC_SLZ-ArtLoadCues
+ptr_PLC_SLZ2:		dc.w PLC_SLZ2-ArtLoadCues
+ptr_PLC_SYZ:		dc.w PLC_SYZ-ArtLoadCues
+ptr_PLC_SYZ2:		dc.w PLC_SYZ2-ArtLoadCues
+ptr_PLC_SBZ:		dc.w PLC_SBZ-ArtLoadCues
+ptr_PLC_SBZ2:		dc.w PLC_SBZ2-ArtLoadCues
+			zonewarning PLC_Levels,4
+ptr_PLC_TitleCard:	dc.w PLC_TitleCard-ArtLoadCues
+ptr_PLC_Boss:		dc.w PLC_Boss-ArtLoadCues
+ptr_PLC_Signpost:	dc.w PLC_Signpost-ArtLoadCues
+ptr_PLC_Warp:		dc.w PLC_Warp-ArtLoadCues
+ptr_PLC_SpecialStage:	dc.w PLC_SpecialStage-ArtLoadCues
+PLC_Animals:
+ptr_PLC_GHZAnimals:	dc.w PLC_GHZAnimals-ArtLoadCues
+ptr_PLC_LZAnimals:	dc.w PLC_LZAnimals-ArtLoadCues
+ptr_PLC_MZAnimals:	dc.w PLC_MZAnimals-ArtLoadCues
+ptr_PLC_SLZAnimals:	dc.w PLC_SLZAnimals-ArtLoadCues
+ptr_PLC_SYZAnimals:	dc.w PLC_SYZAnimals-ArtLoadCues
+ptr_PLC_SBZAnimals:	dc.w PLC_SBZAnimals-ArtLoadCues
+			zonewarning PLC_Animals,2
+ptr_PLC_SSResult:	dc.w PLC_SSResult-ArtLoadCues
+ptr_PLC_Ending:		dc.w PLC_Ending-ArtLoadCues
+ptr_PLC_TryAgain:	dc.w PLC_TryAgain-ArtLoadCues
+ptr_PLC_EggmanSBZ2:	dc.w PLC_EggmanSBZ2-ArtLoadCues
+ptr_PLC_FZBoss:		dc.w PLC_FZBoss-ArtLoadCues
+
+plcm:	macro gfx,vram
+	dc.l gfx
+	dc.w vram
+	endm
+
+; ---------------------------------------------------------------------------
+; Pattern load cues - standard block 1
+; ---------------------------------------------------------------------------
+PLC_Main:	dc.w ((PLC_Mainend-PLC_Main-2)/6)-1
+		plcm	Nem_Lamp, $F400		; lamppost
+		plcm	Nem_Hud, $D940		; HUD
+		plcm	Nem_Lives, $FA80	; lives	counter
+		plcm	Nem_Ring, $F640 	; rings
+		plcm	Nem_Points, $F2E0	; points from enemy
+	PLC_Mainend:
+; ---------------------------------------------------------------------------
+; Pattern load cues - standard block 2
+; ---------------------------------------------------------------------------
+PLC_Main2:	dc.w ((PLC_Main2end-PLC_Main2-2)/6)-1
+		plcm	Nem_Monitors, $D000	; monitors
+		plcm	Nem_Shield, $A820	; shield
+		plcm	Nem_Stars, $AB80	; invincibility	stars
+	PLC_Main2end:
+; ---------------------------------------------------------------------------
+; Pattern load cues - explosion
+; ---------------------------------------------------------------------------
+PLC_Explode:	dc.w ((PLC_Explodeend-PLC_Explode-2)/6)-1
+		plcm	Nem_Explode, $B400	; explosion
+	PLC_Explodeend:
+; ---------------------------------------------------------------------------
+; Pattern load cues - game/time	over
+; ---------------------------------------------------------------------------
+PLC_GameOver:	dc.w ((PLC_GameOverend-PLC_GameOver-2)/6)-1
+		plcm	Nem_GameOver, $ABC0	; game/time over
+	PLC_GameOverend:
+; ---------------------------------------------------------------------------
+; Pattern load cues - Green Hill
+; ---------------------------------------------------------------------------
+PLC_GHZ:	dc.w ((PLC_GHZ2-PLC_GHZ-2)/6)-1
+		plcm	Nem_GHZ_1st, 0		; GHZ main patterns
+		plcm	Nem_GHZ_2nd, $39A0	; GHZ secondary	patterns
+		plcm	Nem_Stalk, $6B00	; flower stalk
+		plcm	Nem_PplRock, $7A00	; purple rock
+		plcm	Nem_Crabmeat, $8000	; crabmeat enemy
+		plcm	Nem_Buzz, $8880		; buzz bomber enemy
+		plcm	Nem_Chopper, $8F60	; chopper enemy
+		plcm	Nem_Newtron, $9360	; newtron enemy
+		plcm	Nem_Motobug, $9E00	; motobug enemy
+		plcm	Nem_Spikes, $A360	; spikes
+		plcm	Nem_HSpring, $A460	; horizontal spring
+		plcm	Nem_VSpring, $A660	; vertical spring
+
+PLC_GHZ2:	dc.w ((PLC_GHZ2end-PLC_GHZ2-2)/6)-1
+		plcm	Nem_Swing, $7000	; swinging platform
+		plcm	Nem_Bridge, $71C0	; bridge
+		plcm	Nem_SpikePole, $7300	; spiked pole
+		plcm	Nem_Ball, $7540		; giant	ball
+		plcm	Nem_GhzWall1, $A1E0	; breakable wall
+		plcm	Nem_GhzWall2, $6980	; normal wall
+	PLC_GHZ2end:
+; ---------------------------------------------------------------------------
+; Pattern load cues - Labyrinth
+; ---------------------------------------------------------------------------
+PLC_LZ:		dc.w ((PLC_LZ2-PLC_LZ-2)/6)-1
+		plcm	Nem_LZ,0		; LZ main patterns
+		plcm	Nem_LzBlock1, $3C00	; block
+		plcm	Nem_LzBlock2, $3E00	; blocks
+		plcm	Nem_Splash, $4B20	; waterfalls and splash
+		plcm	Nem_Water, $6000	; water	surface
+		plcm	Nem_LzSpikeBall, $6200	; spiked ball
+		plcm	Nem_FlapDoor, $6500	; flapping door
+		plcm	Nem_Bubbles, $6900	; bubbles and numbers
+		plcm	Nem_LzBlock3, $7780	; block
+		plcm	Nem_LzDoor1, $7880	; vertical door
+		plcm	Nem_Harpoon, $7980	; harpoon
+		plcm	Nem_Burrobot, $94C0	; burrobot enemy
+
+PLC_LZ2:	dc.w ((PLC_LZ2end-PLC_LZ2-2)/6)-1
+		plcm	Nem_LzPole, $7BC0	; pole that breaks
+		plcm	Nem_LzDoor2, $7CC0	; large	horizontal door
+		plcm	Nem_LzWheel, $7EC0	; wheel
+		plcm	Nem_Gargoyle, $5D20	; gargoyle head
+		if Revision=0
+		plcm	Nem_LzSonic, $8800	; Sonic	holding	his breath
+		else
+		endc
+		plcm	Nem_LzPlatfm, $89E0	; rising platform
+		plcm	Nem_Orbinaut, $8CE0	; orbinaut enemy
+		plcm	Nem_Jaws, $90C0		; jaws enemy
+		plcm	Nem_LzSwitch, $A1E0	; switch
+		plcm	Nem_Cork, $A000		; cork block
+		plcm	Nem_Spikes, $A360	; spikes
+		plcm	Nem_HSpring, $A460	; horizontal spring
+		plcm	Nem_VSpring, $A660	; vertical spring
+	PLC_LZ2end:
+; ---------------------------------------------------------------------------
+; Pattern load cues - Marble
+; ---------------------------------------------------------------------------
+PLC_MZ:		dc.w ((PLC_MZ2-PLC_MZ-2)/6)-1
+		plcm	Nem_MZ,0		; MZ main patterns
+		plcm	Nem_MzMetal, $6000	; metal	blocks
+		plcm	Nem_MzFire, $68A0	; fireballs
+		plcm	Nem_Swing, $7000	; swinging platform
+		plcm	Nem_MzGlass, $71C0	; green	glassy block
+		plcm	Nem_Lava, $7500		; lava
+		plcm	Nem_Buzz, $8880		; buzz bomber enemy
+		plcm	Nem_Yadrin, $8F60	; yadrin enemy
+		plcm	Nem_Basaran, $9700	; basaran enemy
+		plcm	Nem_Cater, $9FE0	; caterkiller enemy
+
+PLC_MZ2:	dc.w ((PLC_MZ2end-PLC_MZ2-2)/6)-1
+		plcm	Nem_MzSwitch, $A260	; switch
+		plcm	Nem_Spikes, $A360	; spikes
+		plcm	Nem_HSpring, $A460	; horizontal spring
+		plcm	Nem_VSpring, $A660	; vertical spring
+		plcm	Nem_MzBlock, $5700	; green	stone block
+	PLC_MZ2end:
+; ---------------------------------------------------------------------------
+; Pattern load cues - Star Light
+; ---------------------------------------------------------------------------
+PLC_SLZ:	dc.w ((PLC_SLZ2-PLC_SLZ-2)/6)-1
+		plcm	Nem_SLZ,0		; SLZ main patterns
+		plcm	Nem_Bomb, $8000		; bomb enemy
+		plcm	Nem_Orbinaut, $8520	; orbinaut enemy
+		plcm	Nem_MzFire, $9000	; fireballs
+		plcm	Nem_SlzBlock, $9C00	; block
+		plcm	Nem_SlzWall, $A260	; breakable wall
+		plcm	Nem_Spikes, $A360	; spikes
+		plcm	Nem_HSpring, $A460	; horizontal spring
+		plcm	Nem_VSpring, $A660	; vertical spring
+
+PLC_SLZ2:	dc.w ((PLC_SLZ2end-PLC_SLZ2-2)/6)-1
+		plcm	Nem_Seesaw, $6E80	; seesaw
+		plcm	Nem_Fan, $7400		; fan
+		plcm	Nem_Pylon, $7980	; foreground pylon
+		plcm	Nem_SlzSwing, $7B80	; swinging platform
+		plcm	Nem_SlzCannon, $9B00	; fireball launcher
+		plcm	Nem_SlzSpike, $9E00	; spikeball
+	PLC_SLZ2end:
+; ---------------------------------------------------------------------------
+; Pattern load cues - Spring Yard
+; ---------------------------------------------------------------------------
+PLC_SYZ:	dc.w ((PLC_SYZ2-PLC_SYZ-2)/6)-1
+		plcm	Nem_SYZ,0		; SYZ main patterns
+		plcm	Nem_Crabmeat, $8000	; crabmeat enemy
+		plcm	Nem_Buzz, $8880		; buzz bomber enemy
+		plcm	Nem_Yadrin, $8F60	; yadrin enemy
+		plcm	Nem_Roller, $9700	; roller enemy
+
+PLC_SYZ2:	dc.w ((PLC_SYZ2end-PLC_SYZ2-2)/6)-1
+		plcm	Nem_Bumper, $7000	; bumper
+		plcm	Nem_SyzSpike1, $72C0	; large	spikeball
+		plcm	Nem_SyzSpike2, $7740	; small	spikeball
+		plcm	Nem_Cater, $9FE0	; caterkiller enemy
+		plcm	Nem_LzSwitch, $A1E0	; switch
+		plcm	Nem_Spikes, $A360	; spikes
+		plcm	Nem_HSpring, $A460	; horizontal spring
+		plcm	Nem_VSpring, $A660	; vertical spring
+	PLC_SYZ2end:
+; ---------------------------------------------------------------------------
+; Pattern load cues - Scrap Brain
+; ---------------------------------------------------------------------------
+PLC_SBZ:	dc.w ((PLC_SBZ2-PLC_SBZ-2)/6)-1
+		plcm	Nem_SBZ,0		; SBZ main patterns
+		plcm	Nem_Stomper, $5800	; moving platform and stomper
+		plcm	Nem_SbzDoor1, $5D00	; door
+		plcm	Nem_Girder, $5E00	; girder
+		plcm	Nem_BallHog, $6040	; ball hog enemy
+		plcm	Nem_SbzWheel1, $6880	; spot on large	wheel
+		plcm	Nem_SbzWheel2, $6900	; wheel	that grabs Sonic
+		plcm	Nem_SyzSpike1, $7220	; large	spikeball
+		plcm	Nem_Cutter, $76A0	; pizza	cutter
+		plcm	Nem_FlamePipe, $7B20	; flaming pipe
+		plcm	Nem_SbzFloor, $7EA0	; collapsing floor
+		plcm	Nem_SbzBlock, $9860	; vanishing block
+
+PLC_SBZ2:	dc.w ((PLC_SBZ2end-PLC_SBZ2-2)/6)-1
+		plcm	Nem_Cater, $5600	; caterkiller enemy
+		plcm	Nem_Bomb, $8000		; bomb enemy
+		plcm	Nem_Orbinaut, $8520	; orbinaut enemy
+		plcm	Nem_SlideFloor, $8C00	; floor	that slides away
+		plcm	Nem_SbzDoor2, $8DE0	; horizontal door
+		plcm	Nem_Electric, $8FC0	; electric orb
+		plcm	Nem_TrapDoor, $9240	; trapdoor
+		plcm	Nem_SbzFloor, $7F20	; collapsing floor
+		plcm	Nem_SpinPform, $9BE0	; small	spinning platform
+		plcm	Nem_LzSwitch, $A1E0	; switch
+		plcm	Nem_Spikes, $A360	; spikes
+		plcm	Nem_HSpring, $A460	; horizontal spring
+		plcm	Nem_VSpring, $A660	; vertical spring
+	PLC_SBZ2end:
+; ---------------------------------------------------------------------------
+; Pattern load cues - title card
+; ---------------------------------------------------------------------------
+PLC_TitleCard:	dc.w ((PLC_TitleCardend-PLC_TitleCard-2)/6)-1
+		plcm	Nem_TitleCard, $B000
+	PLC_TitleCardend:
+; ---------------------------------------------------------------------------
+; Pattern load cues - act 3 boss
+; ---------------------------------------------------------------------------
+PLC_Boss:	dc.w ((PLC_Bossend-PLC_Boss-2)/6)-1
+		plcm	Nem_Eggman, $8000	; Eggman main patterns
+		plcm	Nem_Weapons, $8D80	; Eggman's weapons
+		plcm	Nem_Prison, $93A0	; prison capsule
+		plcm	Nem_Bomb, $A300		; bomb enemy ((gets overwritten)
+		plcm	Nem_SlzSpike, $A300	; spikeball ((SLZ boss)
+		plcm	Nem_Exhaust, $A540	; exhaust flame
+	PLC_Bossend:
+; ---------------------------------------------------------------------------
+; Pattern load cues - act 1/2 signpost
+; ---------------------------------------------------------------------------
+PLC_Signpost:	dc.w ((PLC_Signpostend-PLC_Signpost-2)/6)-1
+		plcm	Nem_SignPost, $D000	; signpost
+		plcm	Nem_Bonus, $96C0	; hidden bonus points
+		plcm	Nem_BigFlash, $8C40	; giant	ring flash effect
+	PLC_Signpostend:
+; ---------------------------------------------------------------------------
+; Pattern load cues - beta special stage warp effect
+; ---------------------------------------------------------------------------
+PLC_Warp:
+		if Revision=0
+		dc.w ((PLC_Warpend-PLC_Warp-2)/6)-1
+		plcm	Nem_Warp, $A820
+		else
+		endc
+	PLC_Warpend:
+; ---------------------------------------------------------------------------
+; Pattern load cues - special stage
+; ---------------------------------------------------------------------------
+PLC_SpecialStage:	dc.w ((PLC_SpeStageend-PLC_SpecialStage-2)/6)-1
+		plcm	Nem_SSBgCloud, 0	; bubble and cloud background
+		plcm	Nem_SSBgFish, $A20	; bird and fish	background
+		plcm	Nem_SSWalls, $2840	; walls
+		plcm	Nem_Bumper, $4760	; bumper
+		plcm	Nem_SSGOAL, $4A20	; GOAL block
+		plcm	Nem_SSUpDown, $4C60	; UP and DOWN blocks
+		plcm	Nem_SSRBlock, $5E00	; R block
+		plcm	Nem_SS1UpBlock, $6E00	; 1UP block
+		plcm	Nem_SSEmStars, $7E00	; emerald collection stars
+		plcm	Nem_SSRedWhite, $8E00	; red and white	block
+		plcm	Nem_SSGhost, $9E00	; ghost	block
+		plcm	Nem_SSWBlock, $AE00	; W block
+		plcm	Nem_SSGlass, $BE00	; glass	block
+		plcm	Nem_SSEmerald, $EE00	; emeralds
+		plcm	Nem_SSZone1, $F2E0	; ZONE 1 block
+		plcm	Nem_SSZone2, $F400	; ZONE 2 block
+		plcm	Nem_SSZone3, $F520	; ZONE 3 block
+	PLC_SpeStageend:
+		plcm	Nem_SSZone4, $F2E0	; ZONE 4 block
+		plcm	Nem_SSZone5, $F400	; ZONE 5 block
+		plcm	Nem_SSZone6, $F520	; ZONE 6 block
+; ---------------------------------------------------------------------------
+; Pattern load cues - GHZ animals
+; ---------------------------------------------------------------------------
+PLC_GHZAnimals:	dc.w ((PLC_GHZAnimalsend-PLC_GHZAnimals-2)/6)-1
+		plcm	Nem_Rabbit, $B000	; rabbit
+		plcm	Nem_Flicky, $B240	; flicky
+	PLC_GHZAnimalsend:
+; ---------------------------------------------------------------------------
+; Pattern load cues - LZ animals
+; ---------------------------------------------------------------------------
+PLC_LZAnimals:	dc.w ((PLC_LZAnimalsend-PLC_LZAnimals-2)/6)-1
+		plcm	Nem_Penguin, $B000	; penguin
+		plcm	Nem_Seal, $B240		; seal
+	PLC_LZAnimalsend:
+; ---------------------------------------------------------------------------
+; Pattern load cues - MZ animals
+; ---------------------------------------------------------------------------
+PLC_MZAnimals:	dc.w ((PLC_MZAnimalsend-PLC_MZAnimals-2)/6)-1
+		plcm	Nem_Squirrel, $B000	; squirrel
+		plcm	Nem_Seal, $B240		; seal
+	PLC_MZAnimalsend:
+; ---------------------------------------------------------------------------
+; Pattern load cues - SLZ animals
+; ---------------------------------------------------------------------------
+PLC_SLZAnimals:	dc.w ((PLC_SLZAnimalsend-PLC_SLZAnimals-2)/6)-1
+		plcm	Nem_Pig, $B000		; pig
+		plcm	Nem_Flicky, $B240	; flicky
+	PLC_SLZAnimalsend:
+; ---------------------------------------------------------------------------
+; Pattern load cues - SYZ animals
+; ---------------------------------------------------------------------------
+PLC_SYZAnimals:	dc.w ((PLC_SYZAnimalsend-PLC_SYZAnimals-2)/6)-1
+		plcm	Nem_Pig, $B000		; pig
+		plcm	Nem_Chicken, $B240	; chicken
+	PLC_SYZAnimalsend:
+; ---------------------------------------------------------------------------
+; Pattern load cues - SBZ animals
+; ---------------------------------------------------------------------------
+PLC_SBZAnimals:	dc.w ((PLC_SBZAnimalsend-PLC_SBZAnimals-2)/6)-1
+		plcm	Nem_Rabbit, $B000	; rabbit
+		plcm	Nem_Chicken, $B240	; chicken
+	PLC_SBZAnimalsend:
+; ---------------------------------------------------------------------------
+; Pattern load cues - special stage results screen
+; ---------------------------------------------------------------------------
+PLC_SSResult:dc.w ((PLC_SpeStResultend-PLC_SSResult-2)/6)-1
+		plcm	Nem_ResultEm, $A820	; emeralds
+		plcm	Nem_MiniSonic, $AA20	; mini Sonic
+	PLC_SpeStResultend:
+; ---------------------------------------------------------------------------
+; Pattern load cues - ending sequence
+; ---------------------------------------------------------------------------
+PLC_Ending:	dc.w ((PLC_Endingend-PLC_Ending-2)/6)-1
+		plcm	Nem_GHZ_1st,0		; GHZ main patterns
+		plcm	Nem_GHZ_2nd, $39A0	; GHZ secondary	patterns
+		plcm	Nem_Stalk, $6B00	; flower stalk
+		plcm	Nem_EndFlower, $7400	; flowers
+		plcm	Nem_EndEm, $78A0	; emeralds
+		plcm	Nem_EndSonic, $7C20	; Sonic
+		if Revision=0
+		plcm	Nem_EndEggman, $A480	; Eggman's death ((unused)
+		else
+		endc
+		plcm	Nem_Rabbit, $AA60	; rabbit
+		plcm	Nem_Chicken, $ACA0	; chicken
+		plcm	Nem_Penguin, $AE60	; penguin
+		plcm	Nem_Seal, $B0A0		; seal
+		plcm	Nem_Pig, $B260		; pig
+		plcm	Nem_Flicky, $B4A0	; flicky
+		plcm	Nem_Squirrel, $B660	; squirrel
+		plcm	Nem_EndStH, $B8A0	; "SONIC THE HEDGEHOG"
+	PLC_Endingend:
+; ---------------------------------------------------------------------------
+; Pattern load cues - "TRY AGAIN" and "END" screens
+; ---------------------------------------------------------------------------
+PLC_TryAgain:	dc.w ((PLC_TryAgainend-PLC_TryAgain-2)/6)-1
+		plcm	Nem_EndEm, $78A0	; emeralds
+		plcm	Nem_TryAgain, $7C20	; Eggman
+		plcm	Nem_CreditText, $B400	; credits alphabet
+	PLC_TryAgainend:
+; ---------------------------------------------------------------------------
+; Pattern load cues - Eggman on SBZ 2
+; ---------------------------------------------------------------------------
+PLC_EggmanSBZ2:	dc.w ((PLC_EggmanSBZ2end-PLC_EggmanSBZ2-2)/6)-1
+		plcm	Nem_SbzBlock, $A300	; block
+		plcm	Nem_Sbz2Eggman, $8000	; Eggman
+		plcm	Nem_LzSwitch, $9400	; switch
+	PLC_EggmanSBZ2end:
+; ---------------------------------------------------------------------------
+; Pattern load cues - final boss
+; ---------------------------------------------------------------------------
+PLC_FZBoss:	dc.w ((PLC_FZBossend-PLC_FZBoss-2)/6)-1
+		plcm	Nem_FzEggman, $7400	; Eggman after boss
+		plcm	Nem_FzBoss, $6000	; FZ boss
+		plcm	Nem_Eggman, $8000	; Eggman main patterns
+		plcm	Nem_Sbz2Eggman, $8E00	; Eggman without ship
+		plcm	Nem_Exhaust, $A540	; exhaust flame
+	PLC_FZBossend:
+		even
+
+; ---------------------------------------------------------------------------
+; Pattern load cue IDs
+; ---------------------------------------------------------------------------
+plcid_Main:		equ (ptr_PLC_Main-ArtLoadCues)/2	; 0
+plcid_Main2:		equ (ptr_PLC_Main2-ArtLoadCues)/2	; 1
+plcid_Explode:		equ (ptr_PLC_Explode-ArtLoadCues)/2	; 2
+plcid_GameOver:		equ (ptr_PLC_GameOver-ArtLoadCues)/2	; 3
+plcid_GHZ:		equ (ptr_PLC_GHZ-ArtLoadCues)/2		; 4
+plcid_GHZ2:		equ (ptr_PLC_GHZ2-ArtLoadCues)/2	; 5
+plcid_LZ:		equ (ptr_PLC_LZ-ArtLoadCues)/2		; 6
+plcid_LZ2:		equ (ptr_PLC_LZ2-ArtLoadCues)/2		; 7
+plcid_MZ:		equ (ptr_PLC_MZ-ArtLoadCues)/2		; 8
+plcid_MZ2:		equ (ptr_PLC_MZ2-ArtLoadCues)/2		; 9
+plcid_SLZ:		equ (ptr_PLC_SLZ-ArtLoadCues)/2		; $A
+plcid_SLZ2:		equ (ptr_PLC_SLZ2-ArtLoadCues)/2	; $B
+plcid_SYZ:		equ (ptr_PLC_SYZ-ArtLoadCues)/2		; $C
+plcid_SYZ2:		equ (ptr_PLC_SYZ2-ArtLoadCues)/2	; $D
+plcid_SBZ:		equ (ptr_PLC_SBZ-ArtLoadCues)/2		; $E
+plcid_SBZ2:		equ (ptr_PLC_SBZ2-ArtLoadCues)/2	; $F
+plcid_TitleCard:	equ (ptr_PLC_TitleCard-ArtLoadCues)/2	; $10
+plcid_Boss:		equ (ptr_PLC_Boss-ArtLoadCues)/2	; $11
+plcid_Signpost:		equ (ptr_PLC_Signpost-ArtLoadCues)/2	; $12
+plcid_Warp:		equ (ptr_PLC_Warp-ArtLoadCues)/2	; $13
+plcid_SpecialStage:	equ (ptr_PLC_SpecialStage-ArtLoadCues)/2 ; $14
+plcid_GHZAnimals:	equ (ptr_PLC_GHZAnimals-ArtLoadCues)/2	; $15
+plcid_LZAnimals:	equ (ptr_PLC_LZAnimals-ArtLoadCues)/2	; $16
+plcid_MZAnimals:	equ (ptr_PLC_MZAnimals-ArtLoadCues)/2	; $17
+plcid_SLZAnimals:	equ (ptr_PLC_SLZAnimals-ArtLoadCues)/2	; $18
+plcid_SYZAnimals:	equ (ptr_PLC_SYZAnimals-ArtLoadCues)/2	; $19
+plcid_SBZAnimals:	equ (ptr_PLC_SBZAnimals-ArtLoadCues)/2	; $1A
+plcid_SSResult:		equ (ptr_PLC_SSResult-ArtLoadCues)/2	; $1B
+plcid_Ending:		equ (ptr_PLC_Ending-ArtLoadCues)/2	; $1C
+plcid_TryAgain:		equ (ptr_PLC_TryAgain-ArtLoadCues)/2	; $1D
+plcid_EggmanSBZ2:	equ (ptr_PLC_EggmanSBZ2-ArtLoadCues)/2	; $1E
+plcid_FZBoss:		equ (ptr_PLC_FZBoss-ArtLoadCues)/2	; $1F
+
 
 		align	$200,$FF
 		if Revision=0
