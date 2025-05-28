@@ -446,9 +446,6 @@ loc_478:
 		enable_ints
 		rte
 
-
-
-
 ShowErrorMessage:
 		lea	(vdp_data_port).l,a6
 		locVRAM	$F800
@@ -494,9 +491,6 @@ ErrorText:	dc.w @exception-ErrorText, @bus-ErrorText
 @line1111:	dc.b "LINE 1111 EMULATOR "
 		even
 
-
-
-
 ShowErrorValue:
 		move.w	#$7CA,(a6)	; display "$" symbol
 		moveq	#7,d2
@@ -507,10 +501,6 @@ ShowErrorValue:
 		dbf	d2,@loop
 		rts
 ; End of function ShowErrorValue
-
-
-
-
 
 @shownumber:
 		move.w	d0,d1
@@ -524,10 +514,6 @@ ShowErrorValue:
 		move.w	d1,(a6)
 		rts
 ; End of function sub_5CA
-
-
-
-
 
 ErrorWaitForC:
 		bsr.w	ReadJoypads
@@ -695,9 +681,6 @@ VBla_08:
 ; Subroutine to run a demo for an amount of time
 ; ---------------------------------------------------------------------------
 
-
-
-
 Demo_Time:
 		bsr.w	LoadTilesAsYouMove
 		jsr	(AnimateLevelGfx).l
@@ -806,9 +789,6 @@ VBla_16:
 	@end:
 		rts
 
-
-
-
 sub_106E:
 		stopZ80
 		waitZ80
@@ -831,9 +811,6 @@ sub_106E:
 ; ---------------------------------------------------------------------------
 ; Horizontal interrupt
 ; ---------------------------------------------------------------------------
-
-
-
 
 HBlank:
 		disable_ints
@@ -898,9 +875,6 @@ loc_119E:
 ; Subroutine to initialise joypads
 ; ---------------------------------------------------------------------------
 
-
-
-
 JoypadInit:
 		stopZ80
 		waitZ80
@@ -915,8 +889,6 @@ JoypadInit:
 ; ---------------------------------------------------------------------------
 ; Subroutine to read joypad input, and send it to the RAM
 ; ---------------------------------------------------------------------------
-
-
 
 ReadJoypads:
 		lea	(v_jpadhold1).w,a0 ; address where joypad states are written
@@ -945,10 +917,6 @@ ReadJoypads:
 		move.b	d1,(a0)+
 		rts
 ; End of function ReadJoypads
-
-
-
-
 
 VDPSetupGame:
 		lea	(vdp_control_port).l,a0
@@ -1011,9 +979,6 @@ VDPSetupArray:	dc.w $8004		; 8-colour mode
 ; Subroutine to clear the screen
 ; ---------------------------------------------------------------------------
 
-
-
-
 ClearScreen:
 		fillVRAM	0,$FFF,vram_fg ; clear foreground namespace
 
@@ -1061,9 +1026,6 @@ ClearScreen:
 ; Subroutine to load the sound driver
 ; ---------------------------------------------------------------------------
 
-
-
-
 SoundDriverLoad:
 		nop
 		stopZ80
@@ -1088,9 +1050,6 @@ SoundDriverLoad:
 ; d0 = track to play
 ; ---------------------------------------------------------------------------
 
-
-
-
 PlaySound:
 		move.b	d0,(v_snddriver_ram+v_soundqueue0).w
 		rts
@@ -1099,9 +1058,6 @@ PlaySound:
 ; ---------------------------------------------------------------------------
 ; Subroutine to play a sound effect
 ; ---------------------------------------------------------------------------
-
-
-
 
 PlaySound_Special:
 		move.b	d0,(v_snddriver_ram+v_soundqueue1).w
@@ -1117,13 +1073,9 @@ PlaySound_Unused:
 		move.b	d0,(v_snddriver_ram+v_soundqueue2).w
 		rts
 
-
 ; ---------------------------------------------------------------------------
 ; Subroutine to pause the game
 ; ---------------------------------------------------------------------------
-
-
-
 
 PauseGame:
 		nop
@@ -1176,7 +1128,6 @@ Pause_SlowMo:
 		rts
 ; End of function PauseGame
 
-
 ; ---------------------------------------------------------------------------
 ; Subroutine to copy a tile map from RAM to VRAM namespace
 
@@ -1186,9 +1137,6 @@ Pause_SlowMo:
 ; d1 = width (cells)
 ; d2 = height (cells)
 ; ---------------------------------------------------------------------------
-
-
-
 
 TilemapToVRAM:
 		lea	(vdp_data_port).l,a6
@@ -1205,7 +1153,6 @@ TilemapToVRAM:
 		dbf	d2,Tilemap_Line	; next line
 		rts
 ; End of function TilemapToVRAM
-
 
 ; ---------------------------------------------------------------------------
 ; Nemesis decompression subroutine, decompresses art directly to VRAM
@@ -1261,9 +1208,6 @@ loc_146A:
 ; Part of the Nemesis decompressor, processes the actual compressed data
 ; ---------------------------------------------------------------------------
 
-
-
-
 NemDec_ProcessCompressedData:
 		move.w	d6,d7
 		subq.w	#8,d7	; get shift value
@@ -1298,10 +1242,6 @@ NemPCD_WritePixel:
 		bne.s	NemPCD_WritePixel_Loop	; if not, loop
 		jmp	(a3)	; otherwise, write the row to its destination, by doing a dynamic jump to NemPCD_WriteRowToVDP, NemDec_WriteAndAdvance, NemPCD_WriteRowToVDP_XOR, or NemDec_WriteAndAdvance_XOR
 ; End of function NemDec_ProcessCompressedData
-
-
-
-
 
 NemPCD_NewRow:
 		moveq	#0,d4	; reset row
@@ -1368,11 +1308,9 @@ NemPCD_WriteRowToRAM_XOR:
 		bne.s	NemPCD_NewRow
 		rts
 
-
 ; ---------------------------------------------------------------------------
 ; Part of the Nemesis decompressor, builds the code table (in RAM)
 ; ---------------------------------------------------------------------------
-
 
 NemDec_BuildCodeTable:
 		move.b	(a0)+,d0	; read first byte
@@ -1429,8 +1367,6 @@ NemBCT_ShortCode_Loop:
 		bra.s	NemBCT_Loop
 ; End of function NemDec_BuildCodeTable
 
-
-
 ; ---------------------------------------------------------------------------
 ; Subroutine to load pattern load cues (aka to queue pattern load requests)
 ; ---------------------------------------------------------------------------
@@ -1438,8 +1374,6 @@ NemBCT_ShortCode_Loop:
 ; ARGUMENTS
 ; d0 = index of PLC list
 ; ---------------------------------------------------------------------------
-
-
 
 ; LoadPLC:
 AddPLC:
@@ -1470,8 +1404,6 @@ AddPLC:
 		movem.l	(sp)+,a1-a2 ; a1=object
 		rts
 ; End of function AddPLC
-
-
 
 ; Queue pattern load requests, but clear the PLQ first
 
@@ -1506,14 +1438,11 @@ NewPLC:
 		rts
 ; End of function NewPLC
 
-
-
 ; ---------------------------------------------------------------------------
 ; Subroutine to clear the pattern load cues
 ; ---------------------------------------------------------------------------
 
 ; Clear the pattern load queue ($FFF680 - $FFF700)
-
 
 ClearPLC:
 		lea	(v_plc_buffer).w,a2 ; PLC buffer space in RAM
@@ -1528,9 +1457,6 @@ ClearPLC:
 ; ---------------------------------------------------------------------------
 ; Subroutine to use graphics listed in a pattern load cue
 ; ---------------------------------------------------------------------------
-
-
-
 
 RunPLC:
 		tst.l	(v_plc_buffer).w
@@ -1565,10 +1491,6 @@ Rplc_Exit:
 		rts
 ; End of function RunPLC
 
-
-
-
-
 sub_1642:
 		tst.w	(f_plc_execute).w
 		beq.w	locret_16DA
@@ -1578,10 +1500,6 @@ sub_1642:
 		addi.w	#$120,($FFFFF684).w
 		bra.s	loc_1676
 ; End of function sub_1642
-
-
-
-
 
 ; sub_165E:
 ProcessDPLC2:
@@ -1642,9 +1560,6 @@ loc_16E2:
 ; Subroutine to execute	the pattern load cue
 ; ---------------------------------------------------------------------------
 
-
-
-
 QuickPLC:
 		lea	(ArtLoadCues).l,a1 ; load the PLC index
 		add.w	d0,d0
@@ -1682,9 +1597,6 @@ QuickPLC:
 
 ; See http://www.segaretro.org/Enigma_compression for format description
 ; ---------------------------------------------------------------------------
-
-
-
 
 EniDec:
 		movem.l	d0-d7/a1-a5,-(sp)
@@ -1904,8 +1816,6 @@ EniDec_Masks:
 		dc.w  $1FF, $3FF, $7FF, $FFF
 		dc.w $1FFF,$3FFF,$7FFF,$FFFF
 
-
-
 ; sub_188C:
 EniDec_FetchByte:
 		sub.w	d0,d6	; subtract length of current entry from shift value so that next entry is read next time around
@@ -1917,7 +1827,6 @@ EniDec_FetchByte:
 @locret:
 		rts
 ; End of function EniDec_FetchByte
-
 
 ; ---------------------------------------------------------------------------
 ; Kosinski decompression algorithm
@@ -1931,9 +1840,6 @@ EniDec_FetchByte:
 ; lea	(destination).l,a1
 ; bsr.w	KosDec
 ; ---------------------------------------------------------------------------
-
-
-
 
 KosDec:
 
@@ -2031,14 +1937,9 @@ Kos_Done:
 		rts
 ; End of function KosDec
 
-
-
 ; ---------------------------------------------------------------------------
 ; Palette cycling routine loading subroutine
 ; ---------------------------------------------------------------------------
-
-
-
 
 PaletteCycle:
 		moveq	#0,d2
@@ -2061,10 +1962,6 @@ PCycle_Index:	dc.w PCycle_GHZ-PCycle_Index
 		dc.w PalCycle_SBZ-PCycle_Index
 		zonewarning PCycle_Index,2
 		dc.w PCycle_GHZ-PCycle_Index	; Ending
-
-
-
-
 
 PCycle_Title:
 		lea	(Pal_TitleCyc).l,a0
@@ -2090,10 +1987,6 @@ PCycGHZ_Go:
 PCycGHZ_Skip:
 		rts
 ; End of function PCycle_GHZ
-
-
-
-
 
 PCycle_LZ:
 ; Waterfalls
@@ -2167,9 +2060,6 @@ PCycLZ_Seq:	dc.b 1,	0, 0, 1, 0, 0, 1, 0
 PCycle_MZ:
 		rts
 
-
-
-
 PalCycle_SLZ:
 		subq.w	#1,(v_pcyc_time).w
 		bpl.s	locret_1A80
@@ -2195,10 +2085,6 @@ locret_1A80:
 		rts
 ; End of function PalCycle_SLZ
 
-
-
-
-
 PalCycle_SYZ:
 		subq.w	#1,(v_pcyc_time).w
 		bpl.s	locret_1AC6
@@ -2221,10 +2107,6 @@ PalCycle_SYZ:
 locret_1AC6:
 		rts
 ; End of function PalCycle_SYZ
-
-
-
-
 
 PalCycle_SBZ:
 		lea	(Pal_SBZCycList1).l,a2
@@ -2300,7 +2182,6 @@ locret_1B64:
 		rts
 ; End of function PalCycle_SBZ
 
-
 Pal_TitleCyc:	incbin	"palette\Cycle - Title Screen Water.bin"
 Pal_GHZCyc:	incbin	"palette\Cycle - GHZ.bin"
 Pal_LZCyc1:	incbin	"palette\Cycle - LZ Waterfall.bin"
@@ -2349,7 +2230,6 @@ Pal_SBZCycList2:
 end_SBZCycList2:
 	even
 
-
 Pal_SBZCyc1:	incbin	"palette\Cycle - SBZ 1.bin"
 Pal_SBZCyc2:	incbin	"palette\Cycle - SBZ 2.bin"
 Pal_SBZCyc3:	incbin	"palette\Cycle - SBZ 3.bin"
@@ -2363,9 +2243,6 @@ Pal_SBZCyc10:	incbin	"palette\Cycle - SBZ 10.bin"
 ; ---------------------------------------------------------------------------
 ; Subroutine to fade in from black
 ; ---------------------------------------------------------------------------
-
-
-
 
 PaletteFadeIn:
 		move.w	#$003F,(v_pfade_start).w ; set start position = 0; size = $40
@@ -2392,10 +2269,6 @@ PalFadeIn_Alt:				; start position and size are already set
 		dbf	d4,@mainloop
 		rts
 ; End of function PaletteFadeIn
-
-
-
-
 
 FadeIn_FromBlack:
 		moveq	#0,d0
@@ -2428,10 +2301,6 @@ FadeIn_FromBlack:
 @exit:
 		rts
 ; End of function FadeIn_FromBlack
-
-
-
-
 
 FadeIn_AddColour:
 @addblue:
@@ -2466,14 +2335,9 @@ FadeIn_AddColour:
 		rts
 ; End of function FadeIn_AddColour
 
-
 ; ---------------------------------------------------------------------------
 ; Subroutine to fade out to black
 ; ---------------------------------------------------------------------------
-
-
-
-
 
 PaletteFadeOut:
 		move.w	#$003F,(v_pfade_start).w ; start position = 0; size = $40
@@ -2487,10 +2351,6 @@ PaletteFadeOut:
 		dbf	d4,@mainloop
 		rts
 ; End of function PaletteFadeOut
-
-
-
-
 
 FadeOut_ToBlack:
 		moveq	#0,d0
@@ -2514,10 +2374,6 @@ FadeOut_ToBlack:
 		dbf	d0,@decolour2
 		rts
 ; End of function FadeOut_ToBlack
-
-
-
-
 
 FadeOut_DecColour:
 @dered:
@@ -2555,9 +2411,6 @@ FadeOut_DecColour:
 ; Subroutine to fade in from white (Special Stage)
 ; ---------------------------------------------------------------------------
 
-
-
-
 PaletteWhiteIn:
 		move.w	#$003F,(v_pfade_start).w ; start position = 0; size = $40
 		moveq	#0,d0
@@ -2581,10 +2434,6 @@ PaletteWhiteIn:
 		dbf	d4,@mainloop
 		rts
 ; End of function PaletteWhiteIn
-
-
-
-
 
 WhiteIn_FromWhite:
 		moveq	#0,d0
@@ -2616,10 +2465,6 @@ WhiteIn_FromWhite:
 	@exit:
 		rts
 ; End of function WhiteIn_FromWhite
-
-
-
-
 
 WhiteIn_DecColour:
 @deblue:
@@ -2660,9 +2505,6 @@ WhiteIn_DecColour:
 ; Subroutine to fade to white (Special Stage)
 ; ---------------------------------------------------------------------------
 
-
-
-
 PaletteWhiteOut:
 		move.w	#$003F,(v_pfade_start).w ; start position = 0; size = $40
 		move.w	#$15,d4
@@ -2675,10 +2517,6 @@ PaletteWhiteOut:
 		dbf	d4,@mainloop
 		rts
 ; End of function PaletteWhiteOut
-
-
-
-
 
 WhiteOut_ToWhite:
 		moveq	#0,d0
@@ -2702,10 +2540,6 @@ WhiteOut_ToWhite:
 		dbf	d0,@addcolour2
 		rts
 ; End of function WhiteOut_ToWhite
-
-
-
-
 
 WhiteOut_AddColour:
 @addred:
@@ -2746,9 +2580,6 @@ WhiteOut_AddColour:
 ; ---------------------------------------------------------------------------
 ; Palette cycling routine - Sega logo
 ; ---------------------------------------------------------------------------
-
-
-
 
 PalCycle_Sega:
 		tst.b	(v_pcyc_time+1).w
@@ -2852,9 +2683,6 @@ Pal_Sega2:	incbin	"palette\Sega2.bin"
 ; d0 = index number for palette
 ; ---------------------------------------------------------------------------
 
-
-
-
 PalLoad1:
 		lea	(PalPointers).l,a1
 		lsl.w	#3,d0
@@ -2869,10 +2697,6 @@ PalLoad1:
 		dbf	d7,@loop
 		rts
 ; End of function PalLoad1
-
-
-
-
 
 PalLoad2:
 		lea	(PalPointers).l,a1
@@ -2892,9 +2716,6 @@ PalLoad2:
 ; Underwater palette loading subroutine
 ; ---------------------------------------------------------------------------
 
-
-
-
 PalLoad3_Water:
 		lea	(PalPointers).l,a1
 		lsl.w	#3,d0
@@ -2909,10 +2730,6 @@ PalLoad3_Water:
 		dbf	d7,@loop
 		rts
 ; End of function PalLoad3_Water
-
-
-
-
 
 PalLoad4_Water:
 		lea	(PalPointers).l,a1
@@ -2968,7 +2785,6 @@ ptr_Pal_Continue:	palp	Pal_Continue,v_pal_dry,$20		; $12 (18) - special stage re
 ptr_Pal_Ending:		palp	Pal_Ending,v_pal_dry,$40		; $13 (19) - ending sequence
 			even
 
-
 palid_SegaBG:		equ (ptr_Pal_SegaBG-PalPointers)/8
 palid_Title:		equ (ptr_Pal_Title-PalPointers)/8
 palid_LevelSel:		equ (ptr_Pal_LevelSel-PalPointers)/8
@@ -2989,7 +2805,6 @@ palid_SBZ3SonWat:	equ (ptr_Pal_SBZ3SonWat-PalPointers)/8
 palid_SSResult:		equ (ptr_Pal_SSResult-PalPointers)/8
 palid_Continue:		equ (ptr_Pal_Continue-PalPointers)/8
 palid_Ending:		equ (ptr_Pal_Ending-PalPointers)/8
-
 
 ; ---------------------------------------------------------------------------
 ; Palette data
@@ -3019,9 +2834,6 @@ Pal_Ending:	incbin	"palette\Ending.bin"
 ; Subroutine to wait for VBlank routines to complete
 ; ---------------------------------------------------------------------------
 
-
-
-
 WaitForVBla:
 		enable_ints
 
@@ -3034,9 +2846,6 @@ WaitForVBla:
 ; ---------------------------------------------------------------------------
 ; Subroutine to generate a pseudo-random number	in d0
 ; ---------------------------------------------------------------------------
-
-
-
 
 RandomNumber:
 		move.l	(v_random).w,d1
@@ -3068,9 +2877,6 @@ RandomNumber:
 ; d1 = cosine
 ; ---------------------------------------------------------------------------
 
-
-
-
 CalcSine:
 		andi.w	#$FF,d0
 		add.w	d0,d0
@@ -3097,9 +2903,6 @@ Sine_Data:	incbin	"misc\sinewave.bin"	; values for a 360° sine wave
 ; output:
 ; d0 = square root of number
 ; ---------------------------------------------------------------------------
-
-
-
 
 CalcSqrt:
 		movem.l	d1-d2,-(sp)
@@ -3144,9 +2947,6 @@ CalcSqrt:
 ; output:
 ; d0 = angle
 ; ---------------------------------------------------------------------------
-
-
-
 
 CalcAngle:
 		movem.l	d3-d4,-(sp)
@@ -3773,9 +3573,6 @@ Demo_Levels:	incbin	"misc\Demo Level Order - Intro.bin"
 ; Subroutine to change what you're selecting in the level select
 ; ---------------------------------------------------------------------------
 
-
-
-
 LevSelControls:
 		move.b	(v_jpadpress1).w,d1
 		andi.b	#btnUp+btnDn,d1	; is up/down pressed and held?
@@ -3842,9 +3639,6 @@ LevSel_NoMove:
 ; Subroutine to load level select text
 ; ---------------------------------------------------------------------------
 
-
-
-
 LevSelTextLoad:
 
 	textpos:	= ($40000000+(($E210&$3FFF)<<16)+(($E210&$C000)>>14))
@@ -3895,10 +3689,6 @@ LevSel_DrawSnd:
 		rts
 ; End of function LevSelTextLoad
 
-
-
-
-
 LevSel_ChgSnd:
 		andi.w	#$F,d0
 		cmpi.b	#$A,d0		; is digit $A-$F?
@@ -3911,10 +3701,6 @@ LevSel_ChgSnd:
 		rts
 ; End of function LevSel_ChgSnd
 
-
-
-
-
 LevSel_ChgLine:
 		moveq	#$17,d2		; number of characters per line
 
@@ -3925,7 +3711,6 @@ LevSel_ChgLine:
 		move.w	#0,(a6)		; use blank character
 		dbf	d2,LevSel_LineLoop
 		rts
-
 
 	LevSel_CharOk:
 		add.w	d3,d0		; combine char with VRAM setting
@@ -4594,9 +4379,6 @@ DynWater_SBZ3:
 ; Labyrinth Zone "wind tunnels" subroutine
 ; ---------------------------------------------------------------------------
 
-
-
-
 LZWindTunnels:
 		tst.w	(v_debuguse).w	; is debug mode being used?
 		bne.w	@quit	; if yes, branch
@@ -4695,9 +4477,6 @@ LZWind_Data:	dc.w $A80, $300, $C10,  $380 ; act 1 values (set 1)
 ; Labyrinth Zone water slide subroutine
 ; ---------------------------------------------------------------------------
 
-
-
-
 LZWaterSlides:
 		lea	(v_player).w,a1
 		btst	#1,obStatus(a1)	; is Sonic jumping?
@@ -4766,13 +4545,9 @@ Slide_Chunks:
 Slide_Chunks_End
 		even
 
-
 ; ---------------------------------------------------------------------------
 ; Subroutine to move Sonic in demo mode
 ; ---------------------------------------------------------------------------
-
-
-
 
 MoveSonicInDemo:
 		tst.w	(f_demo).w	; is demo mode on?
@@ -4879,13 +4654,9 @@ DemoEndDataPtr:	dc.l Demo_EndGHZ1	; demos run during the credits
 		dc.b 0,	$1A, 8,	$FF, 8,	$CA, 0,	0, 0, 0, 0, 0, 0, 0, 0,	0
 		even
 
-
 ; ---------------------------------------------------------------------------
 ; Collision index pointer loading subroutine
 ; ---------------------------------------------------------------------------
-
-
-
 
 ColIndexLoad:
 		moveq	#0,d0
@@ -4912,8 +4683,6 @@ ColPointers:	dc.l Col_GHZ
 ; Oscillating number subroutines
 ; ---------------------------------------------------------------------------
 
-
-
 ; Initialise the values
 
 OscillateNumInit:
@@ -4925,7 +4694,6 @@ OscillateNumInit:
 		move.w	(a2)+,(a1)+	; copy baseline values to RAM
 		dbf	d1,@loop
 		rts
-
 
 ; ===========================================================================
 @baselines:	dc.w %0000000001111100	; oscillation direction bitfield
@@ -4946,8 +4714,6 @@ OscillateNumInit:
 		dc.w $80, 0
 		dc.w $80, 0
 		even
-
-
 
 ; Oscillate values
 
@@ -5016,9 +4782,6 @@ OscillateNumDo:
 ; Subroutine to change synchronised animation variables (rings, giant rings)
 ; ---------------------------------------------------------------------------
 
-
-
-
 SynchroAnimate:
 
 ; Used for GHZ spiked log
@@ -5067,9 +4830,6 @@ SyncEnd:
 ; ---------------------------------------------------------------------------
 ; End-of-act signpost pattern loading subroutine
 ; ---------------------------------------------------------------------------
-
-
-
 
 SignpostArtLoad:
 		tst.w	(v_debuguse).w	; is debug mode being used?
@@ -5318,9 +5078,6 @@ SS_ToLevel:	cmpi.b	#id_Level,(v_gamemode).w
 ; Special stage background loading subroutine
 ; ---------------------------------------------------------------------------
 
-
-
-
 SS_BGLoad:
 		lea	($FF0000).l,a1
 		lea	(Eni_SSBg1).l,a0 ; load mappings for the birds and fish
@@ -5383,9 +5140,6 @@ loc_491C:
 ; ---------------------------------------------------------------------------
 ; Palette cycling routine - special stage
 ; ---------------------------------------------------------------------------
-
-
-
 
 PalCycle_SS:
 		tst.w	(f_pause).w
@@ -5491,9 +5245,6 @@ Pal_SSCyc2:	incbin	"palette\Cycle - Special Stage 2.bin"
 ; ---------------------------------------------------------------------------
 ; Subroutine to make the special stage background animated
 ; ---------------------------------------------------------------------------
-
-
-
 
 SS_BGAnimate:
 		move.w	($FFFFF7A0).w,d0
@@ -5868,7 +5619,6 @@ CSon_ShowRun:
 		jsr	(Sonic_Animate).l
 		jmp	(Sonic_LoadGfx).l
 
-
 		include	"_anim\Continue Screen Sonic.asm"
 Map_ContScr:	include	"_maps\Continue Screen.asm"
 
@@ -6059,9 +5809,6 @@ End_ChkEmerald:
 ; Subroutine controlling Sonic on the ending sequence
 ; ---------------------------------------------------------------------------
 
-
-
-
 End_MoveSonic:
 		move.b	(v_sonicend).w,d0
 		bne.s	End_MoveSon2
@@ -6105,7 +5852,6 @@ End_MoveSonExit:
 ; End of function End_MoveSonic
 
 ; ===========================================================================
-
 
 ; ===========================================================================
 ; ---------------------------------------------------------------------------
@@ -6314,7 +6060,6 @@ ECha_Move:	; Routine 2
 ECha_End:
 		rts
 
-
 ; ===========================================================================
 ; ---------------------------------------------------------------------------
 ; Object 89 - "SONIC THE HEDGEHOG" text on the ending sequence
@@ -6457,9 +6202,6 @@ Cred_WaitLoop:
 ; ---------------------------------------------------------------------------
 ; Ending sequence demo loading subroutine
 ; ---------------------------------------------------------------------------
-
-
-
 
 EndingDemoLoad:
 		move.w	(v_creditsnum).w,d0
@@ -6757,7 +6499,6 @@ loc_5B96:
 locret_5BBA:
 		rts
 
-
 Map_EEgg:	include	"_maps\Try Again & End Eggman.asm"
 
 ; ---------------------------------------------------------------------------
@@ -6785,9 +6526,6 @@ Demo_EndGHZ2:	incbin	"demodata\Ending - GHZ2.bin"
 ; ---------------------------------------------------------------------------
 ; Subroutine to load level boundaries and start	locations
 ; ---------------------------------------------------------------------------
-
-
-
 
 LevelSizeLoad:
 		moveq	#0,d0
@@ -6877,7 +6615,6 @@ EndingStLocArray:
 		incbin	"startpos\sbz2 (Credits demo).bin"
 		incbin	"startpos\ghz1 (Credits demo 2).bin"
 		even
-
 
 ; ===========================================================================
 
@@ -6991,7 +6728,6 @@ SetScreen:
 
 		even
 
-
 ; ---------------------------------------------------------------------------
 ; Which 256x256	tiles contain loops or roll-tunnels
 ; ---------------------------------------------------------------------------
@@ -7067,9 +6803,6 @@ BGScrollBlockSizes:
 ; ---------------------------------------------------------------------------
 ; Subroutine to set scroll speed of some backgrounds
 ; ---------------------------------------------------------------------------
-
-
-
 
 BgScrollSpeed:
 		tst.b	(v_lastlamp).w
@@ -7147,13 +6880,9 @@ BgScroll_End:
 		move.w	#$1E,(v_bg2screenposy).w
 		rts
 
-
 ; ---------------------------------------------------------------------------
 ; Background layer deformation subroutines
 ; ---------------------------------------------------------------------------
-
-
-
 
 DeformLayers:
 		tst.b	(f_nobgscroll).w
@@ -7194,9 +6923,6 @@ Deform_Index:	dc.w Deform_GHZ-Deform_Index, Deform_LZ-Deform_Index
 ; ---------------------------------------------------------------------------
 ; Green Hill Zone background layer deformation code
 ; ---------------------------------------------------------------------------
-
-
-
 
 Deform_GHZ:
 		move.w	(v_scrshiftx).w,d4
@@ -7271,9 +6997,6 @@ loc_6384:
 ; Labyrinth Zone background layer deformation code
 ; ---------------------------------------------------------------------------
 
-
-
-
 Deform_LZ:
 		move.w	(v_scrshiftx).w,d4
 		ext.l	d4
@@ -7302,9 +7025,6 @@ loc_63C6:
 ; ---------------------------------------------------------------------------
 ; Marble Zone background layer deformation code
 ; ---------------------------------------------------------------------------
-
-
-
 
 Deform_MZ:
 		move.w	(v_scrshiftx).w,d4
@@ -7346,9 +7066,6 @@ loc_6426:
 ; ---------------------------------------------------------------------------
 ; Star Light Zone background layer deformation code
 ; ---------------------------------------------------------------------------
-
-
-
 
 Deform_SLZ:
 		move.w	(v_scrshiftx).w,d4
@@ -7402,10 +7119,6 @@ loc_6482:
 		rts
 ; End of function Deform_SLZ
 
-
-
-
-
 Deform_SLZ_2:
 		lea	(v_bgscroll_buffer).w,a1
 		move.w	(v_screenposx).w,d2
@@ -7457,9 +7170,6 @@ loc_64FE:
 ; Spring Yard Zone background layer deformation code
 ; ---------------------------------------------------------------------------
 
-
-
-
 Deform_SYZ:
 		move.w	(v_scrshiftx).w,d4
 		ext.l	d4
@@ -7490,9 +7200,6 @@ loc_653C:
 ; Scrap Brain Zone background layer deformation	code
 ; ---------------------------------------------------------------------------
 
-
-
-
 Deform_SBZ:
 		move.w	(v_scrshiftx).w,d4
 		ext.l	d4
@@ -7521,9 +7228,6 @@ loc_6576:
 ; Subroutine to scroll the level horizontally as Sonic moves
 ; ---------------------------------------------------------------------------
 
-
-
-
 ScrollHoriz:
 		move.w	(v_screenposx).w,d4 ; save old screen position
 		bsr.s	MoveScreenHoriz
@@ -7546,10 +7250,6 @@ ScrollHoriz:
 locret_65B0:
 		rts
 ; End of function ScrollHoriz
-
-
-
-
 
 MoveScreenHoriz:
 		move.w	(v_player+obX).w,d0
@@ -7603,9 +7303,6 @@ loc_6610:
 ; ---------------------------------------------------------------------------
 ; Subroutine to scroll the level vertically as Sonic moves
 ; ---------------------------------------------------------------------------
-
-
-
 
 ScrollVertical:
 		moveq	#0,d1
@@ -7761,10 +7458,6 @@ locret_6766:
 		rts
 ; End of function ScrollVertical
 
-
-
-
-
 ScrollBlock1:
 		move.l	(v_bgscreenposx).w,d2
 		move.l	d2,d0
@@ -7811,10 +7504,6 @@ locret_67D0:
 		rts
 ; End of function ScrollBlock1
 
-
-
-
-
 ScrollBlock2:
 		move.l	(v_bgscreenposx).w,d2
 		move.l	d2,d0
@@ -7844,10 +7533,6 @@ locret_6812:
 		rts
 ; End of function ScrollBlock2
 
-
-
-
-
 ScrollBlock3:
 		move.w	(v_bgscreenposy).w,d3
 		move.w	d0,(v_bgscreenposy).w
@@ -7869,10 +7554,6 @@ loc_683C:
 locret_6842:
 		rts
 ; End of function ScrollBlock3
-
-
-
-
 
 ScrollBlock4:
 		move.w	(v_bg2screenposx).w,d2
@@ -7901,15 +7582,11 @@ locret_6884:
 		rts
 ; End of function ScrollBlock4
 
-
 		else
 
 ; ---------------------------------------------------------------------------
 ; Subroutine to load level boundaries and start	locations
 ; ---------------------------------------------------------------------------
-
-
-
 
 LevelSizeLoad:
 		moveq	#0,d0
@@ -7995,7 +7672,6 @@ EndingStLocArray:
 		incbin	"startpos\sbz2 (Credits demo).bin"
 		incbin	"startpos\ghz1 (Credits demo 2).bin"
 		even
-
 
 ; ===========================================================================
 
@@ -8106,7 +7782,6 @@ StartLocArray:
 
 		even
 
-
 ; ---------------------------------------------------------------------------
 ; Which 256x256	tiles contain loops or roll-tunnels
 ; ---------------------------------------------------------------------------
@@ -8129,9 +7804,6 @@ LoopTileNums:
 ; ---------------------------------------------------------------------------
 ; Subroutine to set scroll speed of some backgrounds
 ; ---------------------------------------------------------------------------
-
-
-
 
 BgScrollSpeed:
 		tst.b	(v_lastlamp).w
@@ -8227,14 +7899,9 @@ BgScroll_End:
 		clr.l	(a2)+
 		rts
 
-
-
 ; ---------------------------------------------------------------------------
 ; Background layer deformation subroutines
 ; ---------------------------------------------------------------------------
-
-
-
 
 DeformLayers:
 		tst.b	(f_nobgscroll).w
@@ -8271,9 +7938,6 @@ Deform_Index:	dc.w Deform_GHZ-Deform_Index, Deform_LZ-Deform_Index
 ; ---------------------------------------------------------------------------
 ; Green Hill Zone background layer deformation code
 ; ---------------------------------------------------------------------------
-
-
-
 
 Deform_GHZ:
 	; block 3 - distant mountains
@@ -8384,9 +8048,6 @@ Deform_GHZ:
 ; Labyrinth Zone background layer deformation code
 ; ---------------------------------------------------------------------------
 
-
-
-
 Deform_LZ:
 	; plain background scroll
 		move.w	(v_scrshiftx).w,d4
@@ -8465,9 +8126,6 @@ Lz_Scroll_Data:
 ; ---------------------------------------------------------------------------
 ; Marble Zone background layer deformation code
 ; ---------------------------------------------------------------------------
-
-
-
 
 Deform_MZ:
 	; block 1 - dungeon interior
@@ -8575,9 +8233,6 @@ Deform_MZ:
 ; Star Light Zone background layer deformation code
 ; ---------------------------------------------------------------------------
 
-
-
-
 Deform_SLZ:
 	; vertical scrolling
 		move.w	(v_scrshifty).w,d5
@@ -8677,9 +8332,6 @@ Bg_Scroll_X:
 ; Spring Yard Zone background layer deformation code
 ; ---------------------------------------------------------------------------
 
-
-
-
 Deform_SYZ:
 	; vertical scrolling
 		move.w	(v_scrshifty).w,d5
@@ -8761,9 +8413,6 @@ Deform_SYZ:
 ; ---------------------------------------------------------------------------
 ; Scrap Brain Zone background layer deformation	code
 ; ---------------------------------------------------------------------------
-
-
-
 
 Deform_SBZ:
 		tst.b	(v_act).w
@@ -8885,9 +8534,6 @@ Deform_SBZ2:;loc_68A2:
 ; Subroutine to scroll the level horizontally as Sonic moves
 ; ---------------------------------------------------------------------------
 
-
-
-
 ScrollHoriz:
 		move.w	(v_screenposx).w,d4 ; save old screen position
 		bsr.s	MoveScreenHoriz
@@ -8910,10 +8556,6 @@ ScrollHoriz:
 	@return:
 		rts
 ; End of function ScrollHoriz
-
-
-
-
 
 MoveScreenHoriz:
 		move.w	(v_player+obX).w,d0
@@ -8967,9 +8609,6 @@ loc_6610:
 ; ---------------------------------------------------------------------------
 ; Subroutine to scroll the level vertically as Sonic moves
 ; ---------------------------------------------------------------------------
-
-
-
 
 ScrollVertical:
 		moveq	#0,d1
@@ -9125,8 +8764,6 @@ loc_6724:
 		rts
 ; End of function ScrollVertical
 
-
-
 ; Scrolls background and sets redraw flags.
 ; d4 - background x offset * $10000
 ; d5 - background y offset * $10000
@@ -9192,10 +8829,6 @@ Bg_Scroll_Y:
 	@return:
 		rts
 
-
-
-
-
 BGScroll_YAbsolute:
 		move.w	(v_bgscreenposy).w,d3
 		move.w	d0,(v_bgscreenposy).w
@@ -9214,8 +8847,6 @@ BGScroll_YAbsolute:
 	@return:
 		rts
 ; End of function BGScroll_YAbsolute
-
-
 
 ; d6 - bit to set for redraw
 
@@ -9241,10 +8872,6 @@ BGScroll_Block1:
 	@return:
 		rts
 ; End of function BGScroll_Block1
-
-
-
-
 
 BGScroll_Block2:
 		move.l	(v_bg2screenposx).w,d2
@@ -9290,11 +8917,7 @@ BGScroll_Block3:
 	@return:
 		rts
 
-
 		endc
-
-
-
 
 ; sub_6886:
 LoadTilesAsYouMove_BGOnly:
@@ -9313,9 +8936,6 @@ LoadTilesAsYouMove_BGOnly:
 ; ---------------------------------------------------------------------------
 ; Subroutine to display	correct	tiles as you move
 ; ---------------------------------------------------------------------------
-
-
-
 
 LoadTilesAsYouMove:
 		lea	(vdp_control_port).l,a5
@@ -9390,9 +9010,6 @@ loc_6938:
 locret_6952:
 		rts
 ; End of function LoadTilesAsYouMove
-
-
-
 
 ; sub_6954:
 DrawBGScrollBlock1:
@@ -9525,9 +9142,6 @@ loc_69EE:
 locret_69F2:
 		rts
 ; End of function DrawBGScrollBlock1
-
-
-
 
 ; Essentially, this draws everything that isn't scroll block 1
 ; sub_69F4:
@@ -9718,7 +9332,6 @@ locret_6AD6:
 			bra.w	locj_6FEC
 ;===============================================================================
 
-
 	; locj_6EA4:
 	DrawBGScrollBlock3:
 			tst.b	(a2)
@@ -9837,8 +9450,6 @@ locret_6AD6:
 
 		endc
 
-
-
 ; Don't be fooled by the name: this function's for drawing from left to right
 ; when the camera's moving up or down
 ; DrawTiles_LR:
@@ -9882,9 +9493,6 @@ DrawBlocks_LR_3:
 ; End of function DrawBlocks_LR_3
 		endc
 
-
-
-
 ; Don't be fooled by the name: this function's for drawing from top to bottom
 ; when the camera's moving left or right
 ; DrawTiles_TB:
@@ -9907,9 +9515,6 @@ DrawBlocks_TB_2:
 		dbf	d6,@loop
 		rts
 ; End of function DrawBlocks_TB_2
-
-
-
 
 ; Draws a block's worth of tiles
 ; Parameters:
@@ -10008,8 +9613,6 @@ DrawFlipXY:
 		rts
 		endc
 
-
-
 ; Gets address of block at a certain coordinate
 ; Parameters:
 ; a4 = Pointer to level layout
@@ -10067,9 +9670,6 @@ locret_6C1E:
 		rts
 ; End of function GetBlockData
 
-
-
-
 ; Produces a VRAM plane access command from coordinates
 ; Parameters:
 ; d4 = Relative Y coordinate
@@ -10099,8 +9699,6 @@ Calc_VRAM_Pos:
 		rts
 ; End of function Calc_VRAM_Pos
 
-
-
 ; not used
 
 ; This is just like Calc_VRAM_Pos, but seemingly for an earlier
@@ -10127,9 +9725,6 @@ Calc_VRAM_Pos_Unknown:
 ; Subroutine to load tiles as soon as the level	appears
 ; ---------------------------------------------------------------------------
 
-
-
-
 LoadTilesFromStart:
 		lea	(vdp_control_port).l,a5
 		lea	(vdp_data_port).l,a6
@@ -10152,10 +9747,6 @@ LoadTilesFromStart:
 			beq.w	Draw_GHz_Bg
 		endc
 ; End of function LoadTilesFromStart
-
-
-
-
 
 DrawChunks:
 		moveq	#-16,d4
@@ -10253,9 +9844,6 @@ DrawChunks:
 ; Subroutine to load basic level data
 ; ---------------------------------------------------------------------------
 
-
-
-
 LevelDataLoad:
 		moveq	#0,d0
 		move.b	(v_zone).w,d0
@@ -10305,9 +9893,6 @@ LevelDataLoad:
 ; Level layout loading subroutine
 ; ---------------------------------------------------------------------------
 
-
-
-
 LevelLayoutLoad:
 		lea	(v_lvllayout).w,a3
 		move.w	#$1FF,d1
@@ -10325,9 +9910,6 @@ LevLoad_ClrRam:
 ; End of function LevelLayoutLoad
 
 ; "LevelLayoutLoad2" is run twice - for	the level and the background
-
-
-
 
 LevelLayoutLoad2:
 		move.w	(v_zone).w,d0
@@ -10357,13 +9939,9 @@ LevLoad_Row:
 		rts
 ; End of function LevelLayoutLoad2
 
-
 ; ---------------------------------------------------------------------------
 ; Dynamic level events
 ; ---------------------------------------------------------------------------
-
-
-
 
 DynamicLevelEvents:
 		moveq	#0,d0
@@ -11073,8 +10651,6 @@ DLE_FZend2:
 DLE_Ending:
 		rts
 
-
-
 ; ===========================================================================
 ; ---------------------------------------------------------------------------
 ; Object 11 - GHZ bridge
@@ -11160,9 +10736,6 @@ Bri_Action:	; Routine 2
 		bsr.w	DisplaySprite
 		bra.w	Bri_ChkDel
 
-
-
-
 Bri_Solid:
 		moveq	#0,d1
 		move.b	obSubtype(a0),d1
@@ -11182,12 +10755,9 @@ Bri_Solid:
 		bra.s	Plat_NoXCheck
 ; End of function Bri_Solid
 
-
 ; ---------------------------------------------------------------------------
 ; Platform subroutine
 ; ---------------------------------------------------------------------------
-
-
 
 PlatformObject:
 		lea	(v_player).w,a1
@@ -11270,9 +10840,6 @@ Plat_Exit:
 ; Sloped platform subroutine (GHZ collapsing ledges and SLZ seesaws)
 ; ---------------------------------------------------------------------------
 
-
-
-
 SlopeObject:
 		lea	(v_player).w,a1
 		tst.w	obVelY(a1)
@@ -11298,10 +10865,6 @@ loc_754A:
 		bra.w	Platform3
 ; End of function SlopeObject
 
-
-
-
-
 Swing_Solid:
 		lea	(v_player).w,a1
 		tst.w	obVelY(a1)
@@ -11320,7 +10883,6 @@ Swing_Solid:
 
 ; ===========================================================================
 
-
 Bri_Platform:	; Routine 4
 		bsr.s	Bri_WalkOff
 		bsr.w	DisplaySprite
@@ -11329,9 +10891,6 @@ Bri_Platform:	; Routine 4
 ; ---------------------------------------------------------------------------
 ; Subroutine allowing Sonic to walk off a bridge
 ; ---------------------------------------------------------------------------
-
-
-
 
 Bri_WalkOff:
 		moveq	#0,d1
@@ -11360,9 +10919,6 @@ locret_75BE:
 ; Subroutine allowing Sonic to walk or jump off a platform
 ; ---------------------------------------------------------------------------
 
-
-
-
 ExitPlatform:
 		move.w	d1,d2
 
@@ -11387,9 +10943,6 @@ locret_75F2:
 		rts
 ; End of function ExitPlatform
 
-
-
-
 Bri_MoveSonic:
 		moveq	#0,d0
 		move.b	$3F(a0),d0
@@ -11406,10 +10959,6 @@ Bri_MoveSonic:
 		move.w	d0,obY(a1)	; change Sonic's position on y-axis
 		rts
 ; End of function Bri_MoveSonic
-
-
-
-
 
 Bri_Bend:
 		move.b	$3E(a0),d0
@@ -11532,9 +11081,7 @@ Bri_Display:	; Routine $A
 		bsr.w	DisplaySprite
 		rts
 
-
 Map_Bri:	include	"_maps\Bridge.asm"
-
 
 ; ===========================================================================
 ; ---------------------------------------------------------------------------
@@ -11684,13 +11231,9 @@ Swing_Action2:	; Routine 4
 
 		rts
 
-
 ; ---------------------------------------------------------------------------
 ; Subroutine to change Sonic's position with a platform
 ; ---------------------------------------------------------------------------
-
-
-
 
 MvSonicOnPtfm:
 		lea	(v_player).w,a1
@@ -11702,9 +11245,6 @@ MvSonicOnPtfm:
 ; ---------------------------------------------------------------------------
 ; Subroutine to change Sonic's position with a platform
 ; ---------------------------------------------------------------------------
-
-
-
 
 MvSonicOnPtfm2:
 		lea	(v_player).w,a1
@@ -11729,10 +11269,6 @@ locret_7B62:
 		rts
 ; End of function MvSonicOnPtfm2
 
-
-
-
-
 Swing_Move:
 		move.b	(v_oscillate+$1A).w,d0
 		move.w	#$80,d1
@@ -11744,10 +11280,6 @@ Swing_Move:
 loc_7B78:
 		bra.s	Swing_Move2
 ; End of function Swing_Move
-
-
-
-
 
 Obj48_Move:
 		tst.b	standonobject(a0)
@@ -11774,10 +11306,6 @@ loc_7B9C:
 loc_7BB6:
 		move.b	obAngle(a0),d0
 ; End of function Obj48_Move
-
-
-
-
 
 Swing_Move2:
 		bsr.w	CalcSine
@@ -11838,7 +11366,6 @@ Swing_Delete:	; Routine 6, 8
 
 Swing_Display:	; Routine $A
 		bra.w	DisplaySprite
-
 
 Map_Swing_GHZ:	include	"_maps\Swinging Platforms (GHZ).asm"
 Map_Swing_SLZ:	include	"_maps\Swinging Platforms (SLZ).asm"
@@ -11928,9 +11455,6 @@ Hel_Action:	; Routine 2, 4
 		bsr.w	DisplaySprite
 		bra.w	Hel_ChkDel
 
-
-
-
 Hel_RotateSpikes:
 		move.b	(v_ani0_frame).w,d0
 		move.b	#0,obColType(a0) ; make object harmless
@@ -11976,9 +11500,7 @@ Hel_Display:	; Routine 8
 		bsr.w	Hel_RotateSpikes
 		bra.w	DisplaySprite
 
-
 Map_Hel:	include	"_maps\Spiked Pole Helix.asm"
-
 
 ; ===========================================================================
 ; ---------------------------------------------------------------------------
@@ -12075,9 +11597,6 @@ Plat_Action2:	; Routine 4
 ; Subroutine to move platform slightly when you	stand on it
 ; ---------------------------------------------------------------------------
 
-
-
-
 Plat_Nudge:
 		move.b	$38(a0),d0
 		bsr.w	CalcSine
@@ -12092,9 +11611,6 @@ Plat_Nudge:
 ; ---------------------------------------------------------------------------
 ; Subroutine to move platforms
 ; ---------------------------------------------------------------------------
-
-
-
 
 Plat_Move:
 		moveq	#0,d0
@@ -12282,7 +11798,6 @@ Plat_ChkDel:
 Plat_Delete:	; Routine 6
 		bra.w	DeleteObject
 
-
 Map_Plat_Unused:include	"_maps\Platforms (unused).asm"
 Map_Plat_GHZ:	include	"_maps\Platforms (GHZ).asm"
 Map_Plat_SYZ:	include	"_maps\Platforms (SYZ).asm"
@@ -12350,9 +11865,6 @@ Ledge_Collapse:	; Routine 4
 		move.b	#1,ledge_collapse_flag(a0)	; set collapse flag
 		subq.b	#1,ledge_timedelay(a0)
 
-
-
-
 Ledge_WalkOff:	; Routine $A
 		move.w	#$30,d1
 		bsr.w	ExitPlatform
@@ -12405,7 +11917,6 @@ Ledge_TimeZero:
 Ledge_Delete:	; Routine 8
 		bsr.w	DeleteObject
 		rts
-
 
 ; ===========================================================================
 ; ---------------------------------------------------------------------------
@@ -12478,9 +11989,6 @@ CFlo_Collapse:	; Routine 4
 		move.b	#1,cflo_collapse_flag(a0)	; set object as "touched"
 		subq.b	#1,cflo_timedelay(a0)
 
-
-
-
 CFlo_WalkOff:	; Routine $A
 		move.w	#$20,d1
 		bsr.w	ExitPlatform
@@ -12547,7 +12055,6 @@ loc_846C:
 		addq.b	#1,obFrame(a0)
 		bra.s	loc_8486
 
-
 ; ===========================================================================
 
 Ledge_Fragment:
@@ -12611,9 +12118,6 @@ CFlo_Data3:	dc.b $16, $1E, $1A, $12, 6, $E,	$A, 2
 ; ---------------------------------------------------------------------------
 ; Sloped platform subroutine (GHZ collapsing ledges and MZ platforms)
 ; ---------------------------------------------------------------------------
-
-
-
 
 SlopeObject2:
 		lea	(v_player).w,a1
@@ -12761,9 +12265,6 @@ Swi_Delete:	; Routine 4
 ; Subroutine to check if Sonic touches the object
 ; ---------------------------------------------------------------------------
 
-
-
-
 Swi_ChkTouch:
 		lea	(v_player).w,a1
 		move.w	obX(a1),d0
@@ -12791,7 +12292,6 @@ Swi_NoTouch:
 		moveq	#0,d0		; Sonic hasn't touched it
 		rts
 ; End of function Swi_ChkTouch
-
 
 Map_Swi:	include	"_maps\Unused Switch.asm"
 
@@ -12863,9 +12363,6 @@ ADoor_Animate:
 		include	"_anim\SBZ Small Door.asm"
 Map_ADoor:	include	"_maps\SBZ Small Door.asm"
 
-
-
-
 Obj44_SolidWall:
 		bsr.w	Obj44_SolidWall2
 		beq.s	loc_8AA8
@@ -12919,10 +12416,6 @@ loc_8AC4:
 locret_8AD8:
 		rts
 ; End of function Obj44_SolidWall
-
-
-
-
 
 Obj44_SolidWall2:
 		lea	(v_player).w,a1
@@ -13238,7 +12731,6 @@ ExItem_Animate:	; Routine 4 (2 for ExplosionBomb)
 	@display:
 		bra.w	DisplaySprite
 
-
 ; ===========================================================================
 ; ---------------------------------------------------------------------------
 ; Object 3F - explosion from a destroyed boss, bomb or cannonball
@@ -13267,8 +12759,6 @@ ExBom_Main:	; Routine 0
 		move.b	#0,obFrame(a0)
 		move.w	#sfx_Bomb,d0
 		jmp	(PlaySound_Special).l	; play exploding bomb sound
-
-
 
 		include	"_anim\Ball Hog.asm"
 Map_Hog:	include	"_maps\Ball Hog.asm"
@@ -13661,16 +13151,12 @@ loc_93EC:
 locret_9402:
 		rts
 
-
-
-
 sub_9404:
 		move.w	(v_player+obX).w,d0
 		sub.w	obX(a0),d0
 		subi.w	#$B8,d0
 		rts
 ; End of function sub_9404
-
 
 ; ===========================================================================
 ; ---------------------------------------------------------------------------
@@ -13866,9 +13352,6 @@ loc_966E:
 ; Subroutine to set the	correct	animation for a	Crabmeat
 ; ---------------------------------------------------------------------------
 
-
-
-
 Crab_SetAni:
 		moveq	#0,d0
 		move.b	obAngle(a0),d3
@@ -13930,7 +13413,6 @@ Crab_BallMove:	; Routine 8
 
 	@delete:
 		bra.w	DeleteObject
-
 
 		include	"_anim\Crabmeat.asm"
 Map_Crab:	include	"_maps\Crabmeat.asm"
@@ -14114,8 +13596,6 @@ Msl_Animate:	; Routine 2
 ; destroyed, and if it has, then cancel the missile
 ; ---------------------------------------------------------------------------
 
-
-
 Msl_ChkCancel:
 		movea.l	msl_parent(a0),a1
 		cmpi.b	#id_ExplosionItem,0(a1) ; has Buzz Bomber been destroyed?
@@ -14162,7 +13642,6 @@ Msl_Animate2:
 		bsr.w	AnimateSprite
 		bsr.w	DisplaySprite
 		rts
-
 
 		include	"_anim\Buzz Bomber.asm"
 		include	"_anim\Buzz Bomber Missile.asm"
@@ -14305,9 +13784,6 @@ Ring_Sparkle:	; Routine 6
 
 Ring_Delete:	; Routine 8
 		bra.w	DeleteObject
-
-
-
 
 CollectRing:
 		addq.w	#1,(v_rings).w	; add 1 to rings
@@ -14456,7 +13932,6 @@ RLoss_Sparkle:	; Routine 6
 RLoss_Delete:	; Routine 8
 		bra.w	DeleteObject
 
-
 ; ===========================================================================
 ; ---------------------------------------------------------------------------
 ; Object 4B - giant ring for entry to special stage
@@ -14524,7 +13999,6 @@ GRing_PlaySnd:
 GRing_Delete:	; Routine 6
 		bra.w	DeleteObject
 
-
 ; ===========================================================================
 ; ---------------------------------------------------------------------------
 ; Object 7C - flash effect when you collect the	giant ring
@@ -14555,9 +14029,6 @@ Flash_ChkDel:	; Routine 2
 		bsr.s	Flash_Collect
 		out_of_range.w	DeleteObject
 		bra.w	DisplaySprite
-
-
-
 
 Flash_Collect:
 		subq.b	#1,obTimeFrame(a0)
@@ -14590,7 +14061,6 @@ Flash_End:
 
 Flash_Delete:	; Routine 4
 		bra.w	DeleteObject
-
 
 		include	"_anim\Rings.asm"
 		if Revision=0
@@ -14769,7 +14239,6 @@ Mon_Explode:
 		move.b	#9,obAnim(a0)	; set monitor type to broken
 		bra.w	DisplaySprite
 
-
 ; ===========================================================================
 ; ---------------------------------------------------------------------------
 ; Object 2E - contents of monitors
@@ -14925,9 +14394,6 @@ Pow_Delete:	; Routine 4
 ; Subroutine to make the sides of a monitor solid
 ; ---------------------------------------------------------------------------
 
-
-
-
 Mon_SolidSides:
 		lea	(v_player).w,a1
 		move.w	obX(a1),d0
@@ -14987,7 +14453,6 @@ loc_A4EA:
 		moveq	#-1,d1
 		rts
 ; End of function Mon_SolidSides
-
 
 		include	"_anim\Monitor.asm"
 Map_Monitor:	include	"_maps\Monitor.asm"
@@ -15100,9 +14565,6 @@ PSB_PrsStart:	; Routine 2
 ; Subroutine to animate	a sprite using an animation script
 ; ---------------------------------------------------------------------------
 
-
-
-
 AnimateSprite:
 		moveq	#0,d0
 		move.b	obAnim(a0),d0	; move animation number to d0
@@ -15182,7 +14644,6 @@ Anim_End_FA:
 Anim_End:
 		rts
 ; End of function AnimateSprite
-
 
 Map_PSB:	include	"_maps\Press Start and TM.asm"
 Map_TSon:	include	"_maps\Title Screen Sonic.asm"
@@ -15439,9 +14900,6 @@ Burro_ChkSonic:
 locret_AE20:
 		rts
 
-
-
-
 Burro_ChkSonic2:
 		move.w	#$80,d1
 		bset	#0,obStatus(a0)
@@ -15456,7 +14914,6 @@ loc_AE40:
 		cmp.w	d2,d0
 		rts
 ; End of function Burro_ChkSonic2
-
 
 		include	"_anim\Burrobot.asm"
 Map_Burro:	include	"_maps\Burrobot.asm"
@@ -15549,9 +15006,6 @@ loc_AF8E:
 LGrass_Display:
 		bsr.w	DisplaySprite
 		bra.w	LGrass_ChkDel
-
-
-
 
 LGrass_Types:
 		moveq	#0,d0
@@ -15670,9 +15124,6 @@ loc_B086:
 locret_B09A:
 		rts
 
-
-
-
 sub_B09C:
 		lea	$36(a2),a2
 		moveq	#0,d0
@@ -15734,8 +15185,6 @@ LGrass_Data2:	incbin	"misc\mz_pfm2.bin"
 		even
 LGrass_Data3:	incbin	"misc\mz_pfm3.bin"
 		even
-
-
 
 ; ===========================================================================
 ; ---------------------------------------------------------------------------
@@ -15819,7 +15268,6 @@ GFire_Animate:
 		lea	(Ani_GFire).l,a1
 		bsr.w	AnimateSprite
 		bra.w	DisplaySprite
-
 
 		include	"_anim\Burning Grass.asm"
 Map_LGrass:	include	"_maps\MZ Large Grassy Platforms.asm"
@@ -15937,9 +15385,6 @@ Glass_Reflect34:
 		move.w	glass_dist(a1),glass_dist(a0)
 		move.w	obY(a1),$30(a0)
 		bra.w	Glass_Types
-
-
-
 
 Glass_Types:
 		moveq	#0,d0
@@ -16069,7 +15514,6 @@ loc_B5EE:
 		sub.w	d0,d1
 		move.w	d1,obY(a0)
 		rts
-
 
 Map_Glass:	include	"_maps\MZ Large Green Glass Blocks.asm"
 
@@ -16369,7 +15813,6 @@ loc_B98C:
 loc_B996:
 		bra.w	CStom_Restart
 
-
 ; ===========================================================================
 ; ---------------------------------------------------------------------------
 ; Object 45 - spiked metal block from beta version (MZ)
@@ -16481,9 +15924,6 @@ SStom_ChkDel:
 		out_of_range.w	DeleteObject,$3A(a0)
 		rts
 
-
-
-
 SStom_Move:
 		moveq	#0,d0
 		move.b	obSubtype(a0),d0
@@ -16538,7 +15978,6 @@ loc_BB3C:
 		add.w	$30(a0),d0
 		move.w	d0,obX(a0)
 		rts
-
 
 Map_CStom:	include	"_maps\Chained Stompers.asm"
 Map_SStom:	include	"_maps\Sideways Stomper.asm"
@@ -16633,9 +16072,6 @@ But_Delete:
 		bsr.w	DeleteObject
 		rts
 
-
-
-
 But_MZBlock:
 		move.w	d3,-(sp)
 		move.w	obX(a0),d2
@@ -16709,7 +16145,6 @@ loc_BE9E:
 		moveq	#1,d0
 		rts
 ; End of function But_MZBlock
-
 
 Map_But:	include	"_maps\Button.asm"
 
@@ -17080,7 +16515,6 @@ loc_C2E0:
 locret_C2E4:
 		rts
 
-
 Map_Push:	include	"_maps\Pushable Blocks.asm"
 
 ; ===========================================================================
@@ -17245,7 +16679,6 @@ Card_ConData:	dc.w 0,	$120, $FEFC, $13C, $414, $154, $214, $154 ; GHZ
 		dc.w 0,	$120, $FEE4, $124, $3EC, $3EC, $1EC, $12C ; FZ
 ; ===========================================================================
 
-
 ; ===========================================================================
 ; ---------------------------------------------------------------------------
 ; Object 39 - "GAME OVER" and "TIME OVER"
@@ -17332,7 +16765,6 @@ Over_ResetLvl:
 
 Over_Display:
 		bra.w	DisplaySprite
-
 
 ; ===========================================================================
 ; ---------------------------------------------------------------------------
@@ -17779,7 +17211,6 @@ SSR_Config:	dc.w $20, $120,	$C4	; start x-pos, main x-pos, y-pos
 		dc.b 2,	3
 		dc.w $3A0, $120, $138
 		dc.b 2,	6
-
 
 ; ===========================================================================
 ; ---------------------------------------------------------------------------
@@ -18280,7 +17711,6 @@ loc_CFC6:
 locret_CFE6:
 		rts
 
-
 Map_Spike:	include	"_maps\Spikes.asm"
 
 ; ===========================================================================
@@ -18432,9 +17862,6 @@ Smash_FragMove:	; Routine 4
 ; Subroutine to smash a	block (GHZ walls and MZ	blocks)
 ; ---------------------------------------------------------------------------
 
-
-
-
 SmashObject:
 		moveq	#0,d0
 		move.b	obFrame(a0),d0
@@ -18509,9 +17936,6 @@ Map_Smash:	include	"_maps\Smashable Walls.asm"
 ; ---------------------------------------------------------------------------
 ; Object code execution subroutine
 ; ---------------------------------------------------------------------------
-
-
-
 
 ExecuteObjects:
 		lea	(v_objspace).w,a0 ; set address for object RAM
@@ -18853,9 +18277,6 @@ id_TryChaos:		equ ((ptr_TryChaos-Obj_Index)/4)+1
 ; Subroutine to make an	object fall downwards, increasingly fast
 ; ---------------------------------------------------------------------------
 
-
-
-
 ObjectFall:
 		move.l	obX(a0),d2
 		move.l	obY(a0),d3
@@ -18874,13 +18295,9 @@ ObjectFall:
 
 ; End of function ObjectFall
 
-
 ; ---------------------------------------------------------------------------
 ; Subroutine translating object speed to update	object position
 ; ---------------------------------------------------------------------------
-
-
-
 
 SpeedToPos:
 		move.l	obX(a0),d2
@@ -18903,9 +18320,6 @@ SpeedToPos:
 ; Subroutine to display	a sprite/object, when a0 is the	object RAM
 ; ---------------------------------------------------------------------------
 
-
-
-
 DisplaySprite:
 		lea	(v_spritequeue).w,a1
 		move.w	obPriority(a0),d0 ; get sprite priority
@@ -18923,13 +18337,9 @@ DisplaySprite:
 
 ; End of function DisplaySprite
 
-
 ; ---------------------------------------------------------------------------
 ; Subroutine to display	a 2nd sprite/object, when a1 is	the object RAM
 ; ---------------------------------------------------------------------------
-
-
-
 
 DisplaySprite1:
 		lea	(v_spritequeue).w,a2
@@ -18951,9 +18361,6 @@ DisplaySprite1:
 ; ---------------------------------------------------------------------------
 ; Subroutine to delete an object
 ; ---------------------------------------------------------------------------
-
-
-
 
 DeleteObject:
 		movea.l	a0,a1		; move object RAM address to (a1)
@@ -18977,9 +18384,6 @@ BldSpr_ScrPos:	dc.l 0				; blank
 ; ---------------------------------------------------------------------------
 ; Subroutine to convert	mappings (etc) to proper Megadrive sprites
 ; ---------------------------------------------------------------------------
-
-
-
 
 BuildSprites:
 		lea	(v_spritetablebuffer).w,a2 ; set address for sprite table
@@ -19087,10 +18491,6 @@ BuildSprites:
 		rts
 ; End of function BuildSprites
 
-
-
-
-
 BuildSpr_Draw:
 		movea.w	obGfx(a0),a3
 		btst	#0,d4
@@ -19098,10 +18498,6 @@ BuildSpr_Draw:
 		btst	#1,d4
 		bne.w	BuildSpr_FlipY
 ; End of function BuildSpr_Draw
-
-
-
-
 
 BuildSpr_Normal:
 		cmpi.b	#$50,d5		; check sprite limit
@@ -19262,9 +18658,6 @@ BuildSpr_FlipXY:
 ; d0 = flag set if object is off screen
 ; ---------------------------------------------------------------------------
 
-
-
-
 ChkObjectVisible:
 		move.w	obX(a0),d0	; get object x-position
 		sub.w	(v_screenposx).w,d0 ; subtract screen x-position
@@ -19294,9 +18687,6 @@ ChkObjectVisible:
 ; d0 = flag set if object is off screen
 ; ---------------------------------------------------------------------------
 
-
-
-
 ChkPartiallyVisible:
 		moveq	#0,d1
 		move.b	obActWid(a0),d1
@@ -19323,13 +18713,9 @@ ChkPartiallyVisible:
 		rts
 ; End of function ChkPartiallyVisible
 
-
 ; ---------------------------------------------------------------------------
 ; Subroutine to load a level's objects
 ; ---------------------------------------------------------------------------
-
-
-
 
 ObjPosLoad:
 		moveq	#0,d0
@@ -19553,9 +18939,6 @@ locret_DA8A:
 ; a1 = free position in object RAM
 ; ---------------------------------------------------------------------------
 
-
-
-
 FindFreeObj:
 		lea	(v_lvlobjspace).w,a1 ; start address for object RAM
 		move.w	#$5F,d0
@@ -19571,16 +18954,12 @@ FindFreeObj:
 
 ; End of function FindFreeObj
 
-
 ; ---------------------------------------------------------------------------
 ; Subroutine to find a free object space AFTER the current one
 
 ; output:
 ; a1 = free position in object RAM
 ; ---------------------------------------------------------------------------
-
-
-
 
 FindNextFreeObj:
 		movea.l	a0,a1
@@ -19797,7 +19176,6 @@ Spring_ResetDwn:
 		subq.b	#4,obRoutine(a0) ; goto "Spring_Dwn" routine
 		rts
 
-
 		include	"_anim\Springs.asm"
 Map_Spring:	include	"_maps\Springs.asm"
 
@@ -19969,7 +19347,6 @@ Newt_Action:	; Routine 2
 Newt_Delete:	; Routine 4
 		bra.w	DeleteObject
 
-
 		include	"_anim\Newtron.asm"
 Map_Newt:	include	"_maps\Newtron.asm"
 
@@ -20113,9 +19490,6 @@ Roll_MatchFloor:
 locret_E150:
 		rts
 
-
-
-
 Roll_Stop:
 		tst.b	$32(a0)
 		bmi.s	locret_E188
@@ -20134,10 +19508,8 @@ locret_E188:
 		rts
 ; End of function Roll_Stop
 
-
 		include	"_anim\Roller.asm"
 Map_Roll:	include	"_maps\Roller.asm"
-
 
 ; ===========================================================================
 ; ---------------------------------------------------------------------------
@@ -20181,7 +19553,6 @@ Edge_Display:	; Routine 4
 		rts
 
 Map_Edge:	include	"_maps\GHZ Edge Walls.asm"
-
 
 ; ===========================================================================
 ; ---------------------------------------------------------------------------
@@ -20391,7 +19762,6 @@ LBall_Type08:
 LBall_Delete:
 		bra.w	DeleteObject
 
-
 		include	"_anim\Fireballs.asm"
 
 ; ===========================================================================
@@ -20458,7 +19828,6 @@ Flame_ChkDel:
 
 		include	"_anim\Flamethrower.asm"
 Map_Flame:	include	"_maps\Flamethrower.asm"
-
 
 ; ===========================================================================
 ; ---------------------------------------------------------------------------
@@ -20585,7 +19954,6 @@ Brick_Type04:
 		move.w	d1,obY(a0)	; make the block wobble
 		rts
 
-
 Map_Brick:	include	"_maps\MZ Bricks.asm"
 
 ; ===========================================================================
@@ -20711,7 +20079,6 @@ Bump_Hit:	; Routine 2
 	@delete:
 		bra.w	DeleteObject
 
-
 		include	"_anim\Bumper.asm"
 Map_Bump:	include	"_maps\Bumper.asm"
 
@@ -20836,13 +20203,9 @@ Sign_SonicRun:	; Routine 6
 	loc_EC86:
 		addq.b	#2,obRoutine(a0)
 
-
 ; ---------------------------------------------------------------------------
 ; Subroutine to set up bonuses at the end of an	act
 ; ---------------------------------------------------------------------------
-
-
-
 
 GotThroughAct:
 		tst.b	(v_endcard).w
@@ -20886,8 +20249,6 @@ TimeBonuses:	dc.w 5000, 5000, 1000, 500, 400, 400, 300, 300,	200, 200
 
 Sign_Exit:	; Routine 8
 		rts
-
-
 
 		include	"_anim\Signpost.asm"
 Map_Sign:	include	"_maps\Signpost.asm"
@@ -20989,7 +20350,6 @@ GMake_Delete:	; Routine $A
 		tst.b	obSubtype(a0)
 		beq.w	DeleteObject
 		rts
-
 
 ; ===========================================================================
 ; ---------------------------------------------------------------------------
@@ -21161,8 +20521,6 @@ loc_F04C:
 Geyser_Delete:	; Routine 6
 		bra.w	DeleteObject
 
-
-
 ; ===========================================================================
 ; ---------------------------------------------------------------------------
 ; Object 4E - advancing wall of	lava (MZ)
@@ -21295,7 +20653,6 @@ LWall_Move:	; Routine 6
 LWall_Delete:	; Routine 8
 		bra.w	DeleteObject
 
-
 ; ===========================================================================
 ; ---------------------------------------------------------------------------
 ; Object 54 - invisible lava tag (MZ)
@@ -21340,7 +20697,6 @@ Map_LTag:	include	"_maps\Lava Tag.asm"
 		include	"_anim\Wall of Lava.asm"
 Map_Geyser:	include	"_maps\Lava Geyser.asm"
 Map_LWall:	include	"_maps\Wall of Lava.asm"
-
 
 ; ===========================================================================
 ; ---------------------------------------------------------------------------
@@ -21476,7 +20832,6 @@ Moto_Animate:	; Routine 4
 Moto_Delete:	; Routine 6
 		bra.w	DeleteObject
 
-
 		include	"_anim\Moto Bug.asm"
 Map_Moto:	include	"_maps\Moto Bug.asm"
 
@@ -21486,9 +20841,6 @@ Map_Moto:	include	"_maps\Moto Bug.asm"
 
 Obj4F:
 		rts
-
-
-
 
 Yad_ChkWall:
 		move.w	(v_framecount).w,d0
@@ -21606,7 +20958,6 @@ Yad_Pause:
 		move.b	#0,obAnim(a0)
 		rts
 
-
 		include	"_anim\Yadrin.asm"
 Map_Yad:	include	"_maps\Yadrin.asm"
 
@@ -21619,9 +20970,6 @@ Map_Yad:	include	"_maps\Yadrin.asm"
 ; d3 = height / 2 (when walking)
 ; d4 = x-axis position
 ; ---------------------------------------------------------------------------
-
-
-
 
 SolidObject:
 		tst.b	obSolid(a0)	; is Sonic standing on the object?
@@ -21888,10 +21236,6 @@ Solid_Miss:
 		rts
 ; End of function SolidObject
 
-
-
-
-
 Solid_ResetFloor:
 		btst	#3,obStatus(a1)	; is Sonic standing on something?
 		beq.s	@notonobj	; if not, branch
@@ -21925,7 +21269,6 @@ Solid_ResetFloor:
 		bset	#3,obStatus(a0)	; set Sonic standing on object flag
 		rts
 ; End of function Solid_ResetFloor
-
 
 ; ===========================================================================
 ; ---------------------------------------------------------------------------
@@ -22031,9 +21374,7 @@ Smab_Speeds:	dc.w -$200, -$200	; x-speed, y-speed
 
 Smab_Scores:	dc.w 10, 20, 50, 100
 
-
 Map_Smab:	include	"_maps\Smashable Green Block.asm"
-
 
 ; ===========================================================================
 ; ---------------------------------------------------------------------------
@@ -22275,7 +21616,6 @@ MBlock_0A_Reset:
 		subq.b	#1,obSubtype(a0)
 		rts
 
-
 Map_MBlock:	include	"_maps\Moving Blocks (MZ and SBZ).asm"
 Map_MBlockLZ:	include	"_maps\Moving Blocks (LZ).asm"
 
@@ -22441,7 +21781,6 @@ Bas_Action:	; Routine 2
 		tst.b	obRender(a0)
 		bpl.w	DeleteObject
 		rts
-
 
 		include	"_anim\Basaran.asm"
 Map_Bas:	include	"_maps\Basaran.asm"
@@ -22953,7 +22292,6 @@ FBlock_Action:	; Routine 2
 		move.w	d1,obX(a0)
 		rts
 
-
 Map_FBlock:	include	"_maps\Floating Blocks and Doors.asm"
 
 ; ===========================================================================
@@ -23241,7 +22579,6 @@ BBall_Move:	; Routine 2
 		move.w	d5,obX(a0)
 		rts
 
-
 Map_BBall:	include	"_maps\Big Spiked Ball.asm"
 
 ; ===========================================================================
@@ -23436,9 +22773,6 @@ Elev_Types:
 	@delete:
 		bra.w	DeleteObject
 
-
-
-
 Elev_Move:
 		move.w	$38(a0),d0
 		tst.b	$3A(a0)
@@ -23493,7 +22827,6 @@ Elev_MakeMulti:	; Routine 6
 		addq.l	#4,sp
 		out_of_range.w	DeleteObject
 		rts
-
 
 Map_Elev:	include	"_maps\SLZ Elevators.asm"
 
@@ -23609,7 +22942,6 @@ Circ_Types:
 		add.w	circ_origY(a0),d2
 		move.w	d2,obY(a0)
 		rts
-
 
 Map_Circ:	include	"_maps\SLZ Circling Platform.asm"
 
@@ -23793,7 +23125,6 @@ locret_11038:
 		rts
 		rts
 
-
 Map_Stair:	include	"_maps\Staircase.asm"
 
 ; ===========================================================================
@@ -23901,7 +23232,6 @@ Surf_Action:	; Routine 2
 @display:
 		bra.w	DisplaySprite
 
-
 Map_Surf:	include	"_maps\Water Surface.asm"
 
 ; ===========================================================================
@@ -24006,7 +23336,6 @@ Pole_Action:	; Routine 2
 
 Pole_Display:	; Routine 4
 		bra.w	RememberState
-
 
 Map_Pole:	include	"_maps\Pole that Breaks.asm"
 
@@ -24133,7 +23462,6 @@ Invis_Solid:	; Routine 2
 	@delete:
 		jmp	(DeleteObject).l
 
-
 Map_Invis:	include	"_maps\Invisible Barriers.asm"
 
 ; ===========================================================================
@@ -24237,7 +23565,6 @@ Fan_Delay:	; Routine 2
 		bsr.w	DisplaySprite
 		out_of_range.w	DeleteObject
 		rts
-
 
 Map_Fan:	include	"_maps\Fan.asm"
 
@@ -24517,7 +23844,6 @@ See_DataSlope:	incbin	"misc\slzssaw1.bin"
 See_DataFlat:	incbin	"misc\slzssaw2.bin"
 		even
 
-
 Map_Seesaw:	include	"_maps\Seesaw.asm"
 Map_SSawBall:	include	"_maps\Seesaw Ball.asm"
 
@@ -24717,10 +24043,8 @@ Bom_End:	; Routine 6
 ; ===========================================================================
 Bom_ShrSpeed:	dc.w -$200, -$300, -$100, -$200, $200, -$300, $100, -$200
 
-
 		include	"_anim\Bomb Enemy.asm"
 Map_Bomb:	include	"_maps\Bomb Enemy.asm"
-
 
 ; ===========================================================================
 ; ---------------------------------------------------------------------------
@@ -24914,7 +24238,6 @@ Orb_ChkDel2:	; Routine 8
 
 		include	"_anim\Orbinaut.asm"
 Map_Orb:	include	"_maps\Orbinaut.asm"
-
 
 ; ===========================================================================
 ; ---------------------------------------------------------------------------
@@ -25182,7 +24505,6 @@ loc_121A6:
 locret_121C0:
 		rts
 
-
 Map_LBlock:	include	"_maps\LZ Blocks.asm"
 
 ; ===========================================================================
@@ -25449,9 +24771,6 @@ loc_124FC:
 		addq.l	#4,sp
 		bra.w	RememberState
 
-
-
-
 sub_12502:
 		tst.b	(f_switch+$E).w
 		beq.s	loc_12520
@@ -25495,10 +24814,6 @@ loc_1256A:
 		bsr.w	SpeedToPos
 		rts
 ; End of function sub_12502
-
-
-
-
 
 LCon_ChangeDir:
 		moveq	#0,d0
@@ -25571,7 +24886,6 @@ word_12628:	dc.w $10, $D68,	$D22, $482, $D22, $5DE,	$DAE, $5DE, $DAE, $482
 word_1263C:	dc.w $10, $DA0,	$D62, $3A2, $DEE, $3A2,	$DEE, $4DE, $D62, $4DE
 word_12650:	dc.w $14, $D00,	$CAC, $242, $DDE, $242,	$DDE, $3DE, $C52, $3DE,	$C52, $29C
 word_12668:	dc.w $10, $1300, $1252,	$20A, $13DE, $20A, $13DE, $2BE,	$1252, $2BE
-
 
 Map_LConv:	include	"_maps\LZ Conveyor.asm"
 
@@ -25829,7 +25143,6 @@ Bub_ChkSonic:
 		moveq	#0,d0
 		rts
 
-
 		include	"_anim\Bubbles.asm"
 Map_Bub:	include	"_maps\Bubbles.asm"
 
@@ -25904,7 +25217,6 @@ loc_12B36:	; Routine 8
 
 	@animate:
 		bra.s	WFall_Animate
-
 
 		include	"_anim\Waterfalls.asm"
 Map_WFall	include	"_maps\Waterfalls.asm"
@@ -26071,9 +25383,6 @@ Sonic_Display:
 ; Subroutine to record Sonic's previous positions for invincibility stars
 ; ---------------------------------------------------------------------------
 
-
-
-
 Sonic_RecordPosition:
 		move.w	(v_trackpos).w,d0
 		lea	(v_tracksonic).w,a1
@@ -26087,9 +25396,6 @@ Sonic_RecordPosition:
 ; ---------------------------------------------------------------------------
 ; Subroutine for Sonic when he's underwater
 ; ---------------------------------------------------------------------------
-
-
-
 
 Sonic_Water:
 		cmpi.b	#1,(v_zone).w	; is level LZ?
@@ -26199,9 +25505,6 @@ loc_12EA6:
 ; ---------------------------------------------------------------------------
 ; Subroutine to make Sonic walk/run
 ; ---------------------------------------------------------------------------
-
-
-
 
 Sonic_Move:
 		move.w	(v_sonspeedmax).w,d6
@@ -26390,10 +25693,6 @@ locret_1307C:
 		rts
 ; End of function Sonic_Move
 
-
-
-
-
 Sonic_MoveLeft:
 		move.w	obInertia(a0),d0
 		beq.s	loc_13086
@@ -26441,10 +25740,6 @@ locret_130E8:
 		rts
 ; End of function Sonic_MoveLeft
 
-
-
-
-
 Sonic_MoveRight:
 		move.w	obInertia(a0),d0
 		bmi.s	loc_13118
@@ -26490,9 +25785,6 @@ locret_1314E:
 ; ---------------------------------------------------------------------------
 ; Subroutine to change Sonic's speed as he rolls
 ; ---------------------------------------------------------------------------
-
-
-
 
 Sonic_RollSpeed:
 		move.w	(v_sonspeedmax).w,d6
@@ -26566,10 +25858,6 @@ loc_131FA:
 		bra.w	loc_1300C
 ; End of function Sonic_RollSpeed
 
-
-
-
-
 Sonic_RollLeft:
 		move.w	obInertia(a0),d0
 		beq.s	loc_1320A
@@ -26590,10 +25878,6 @@ loc_13220:
 		move.w	d0,obInertia(a0)
 		rts
 ; End of function Sonic_RollLeft
-
-
-
-
 
 Sonic_RollRight:
 		move.w	obInertia(a0),d0
@@ -26616,9 +25900,6 @@ loc_13242:
 ; ---------------------------------------------------------------------------
 ; Subroutine to change Sonic's direction while jumping
 ; ---------------------------------------------------------------------------
-
-
-
 
 Sonic_JumpDirection:
 		move.w	(v_sonspeedmax).w,d6
@@ -26687,7 +25968,6 @@ locret_132D2:
 		rts
 ; End of function Sonic_JumpDirection
 
-
 ; ===========================================================================
 ; ---------------------------------------------------------------------------
 ; Unused subroutine to squash Sonic
@@ -26710,9 +25990,6 @@ locret_13302:
 ; ---------------------------------------------------------------------------
 ; Subroutine to prevent	Sonic leaving the boundaries of	a level
 ; ---------------------------------------------------------------------------
-
-
-
 
 Sonic_LevelBound:
 		move.l	obX(a0),d1
@@ -26766,9 +26043,6 @@ Sonic_LevelBound:
 ; Subroutine allowing Sonic to roll when he's moving
 ; ---------------------------------------------------------------------------
 
-
-
-
 Sonic_Roll:
 		tst.b	(f_slidemode).w
 		bne.s	@noroll
@@ -26813,9 +26087,6 @@ Sonic_ChkRoll:
 ; ---------------------------------------------------------------------------
 ; Subroutine allowing Sonic to jump
 ; ---------------------------------------------------------------------------
-
-
-
 
 Sonic_Jump:
 		move.b	(v_jpadpress2).w,d0
@@ -26872,9 +26143,6 @@ loc_13490:
 ; Subroutine controlling Sonic's jump height/duration
 ; ---------------------------------------------------------------------------
 
-
-
-
 Sonic_JumpHeight:
 		tst.b	$3C(a0)
 		beq.s	loc_134C4
@@ -26908,9 +26176,6 @@ locret_134D2:
 ; Subroutine to slow Sonic walking up a	slope
 ; ---------------------------------------------------------------------------
 
-
-
-
 Sonic_SlopeResist:
 		move.b	obAngle(a0),d0
 		addi.b	#$60,d0
@@ -26941,9 +26206,6 @@ locret_13508:
 ; ---------------------------------------------------------------------------
 ; Subroutine to push Sonic down	a slope	while he's rolling
 ; ---------------------------------------------------------------------------
-
-
-
 
 Sonic_RollRepel:
 		move.b	obAngle(a0),d0
@@ -26981,9 +26243,6 @@ locret_13544:
 ; Subroutine to push Sonic down	a slope
 ; ---------------------------------------------------------------------------
 
-
-
-
 Sonic_SlopeRepel:
 		nop
 		tst.b	$38(a0)
@@ -27017,9 +26276,6 @@ loc_13582:
 ; Subroutine to return Sonic's angle to 0 as he jumps
 ; ---------------------------------------------------------------------------
 
-
-
-
 Sonic_JumpAngle:
 		move.b	obAngle(a0),d0	; get Sonic's angle
 		beq.s	locret_135A2	; if already 0, branch
@@ -27047,9 +26303,6 @@ locret_135A2:
 ; ---------------------------------------------------------------------------
 ; Subroutine for Sonic to interact with the floor after	jumping/falling
 ; ---------------------------------------------------------------------------
-
-
-
 
 Sonic_Floor:
 		move.w	obVelX(a0),d1
@@ -27254,9 +26507,6 @@ locret_1379E:
 ; Subroutine to reset Sonic's mode when he lands on the floor
 ; ---------------------------------------------------------------------------
 
-
-
-
 Sonic_ResetOnFloor:
 		btst	#4,obStatus(a0)
 		beq.s	loc_137AE
@@ -27304,9 +26554,6 @@ loc_1380C:
 ; Subroutine to stop Sonic falling after he's been hurt
 ; ---------------------------------------------------------------------------
 
-
-
-
 Sonic_HurtStop:
 		move.w	(v_limitbtm2).w,d0
 		addi.w	#$E0,d0
@@ -27338,9 +26585,6 @@ Sonic_Death:	; Routine 6
 		bsr.w	Sonic_Animate
 		bsr.w	Sonic_LoadGfx
 		jmp	(DisplaySprite).l
-
-
-
 
 GameOver:
 		move.w	(v_limitbtm2).w,d0
@@ -27398,9 +26642,6 @@ Sonic_ResetLevel:; Routine 8
 ; ---------------------------------------------------------------------------
 ; Subroutine to make Sonic run around loops (GHZ/SLZ)
 ; ---------------------------------------------------------------------------
-
-
-
 
 Sonic_Loops:
 		cmpi.b	#id_SLZ,(v_zone).w ; is level SLZ ?
@@ -27482,9 +26723,6 @@ Sonic_Loops:
 ; ---------------------------------------------------------------------------
 ; Subroutine to animate	Sonic's sprites
 ; ---------------------------------------------------------------------------
-
-
-
 
 Sonic_Animate:
 		lea	(Ani_Sonic).l,a1
@@ -27661,9 +26899,6 @@ Sonic_Animate:
 ; ---------------------------------------------------------------------------
 ; Sonic graphics loading subroutine
 ; ---------------------------------------------------------------------------
-
-
-
 
 Sonic_LoadGfx:
 		moveq	#0,d0
@@ -28047,14 +27282,9 @@ Drown_Countdown:; Routine $A
 @nocountdown:
 		rts
 
-
-
 ; ---------------------------------------------------------------------------
 ; Subroutine to play music for LZ/SBZ3 after a countdown
 ; ---------------------------------------------------------------------------
-
-
-
 
 ResumeMusic:
 		cmpi.w	#12,(v_air).w	; more than 12 seconds of air left?
@@ -28194,7 +27424,6 @@ Shi_Stars:	; Routine 4
 Shi_Start_Delete:
 		jmp	(DeleteObject).l
 
-
 ; ===========================================================================
 ; ---------------------------------------------------------------------------
 ; Object 4A - special stage entry from beta
@@ -28291,7 +27520,6 @@ Spla_Display:	; Routine 2
 Spla_Delete:	; Routine 4
 		jmp	(DeleteObject).l	; delete when animation is complete
 
-
 		include	"_anim\Shield and Invincibility.asm"
 Map_Shield:	include	"_maps\Shield and Invincibility.asm"
 		include	"_anim\Special Stage Entry (Unused).asm"
@@ -28302,9 +27530,6 @@ Map_Splash:	include	"_maps\Water Splash.asm"
 ; ---------------------------------------------------------------------------
 ; Subroutine to change Sonic's angle & position as he walks along the floor
 ; ---------------------------------------------------------------------------
-
-
-
 
 Sonic_AnglePos:
 		btst	#3,obStatus(a0)
@@ -28459,9 +27684,6 @@ locret_1470A:
 ; Subroutine to change Sonic's angle as he walks along the floor
 ; ---------------------------------------------------------------------------
 
-
-
-
 Sonic_Angle:
 		move.b	($FFFFF76A).w,d2
 		cmp.w	d0,d1
@@ -28487,9 +27709,6 @@ loc_1476A:
 ; ---------------------------------------------------------------------------
 ; Subroutine allowing Sonic to walk up a vertical slope/wall to his right
 ; ---------------------------------------------------------------------------
-
-
-
 
 Sonic_WalkVertR:
 		move.w	obY(a0),d2
@@ -28556,9 +27775,6 @@ loc_147FE:
 ; ---------------------------------------------------------------------------
 ; Subroutine allowing Sonic to walk upside-down
 ; ---------------------------------------------------------------------------
-
-
-
 
 Sonic_WalkCeiling:
 		move.w	obY(a0),d2
@@ -28627,9 +27843,6 @@ loc_148A0:
 ; Subroutine allowing Sonic to walk up a vertical slope/wall to his left
 ; ---------------------------------------------------------------------------
 
-
-
-
 Sonic_WalkVertL:
 		move.w	obY(a0),d2
 		move.w	obX(a0),d3
@@ -28693,7 +27906,6 @@ loc_14942:
 		rts
 ; End of function Sonic_WalkVertL
 
-
 ; ---------------------------------------------------------------------------
 ; Subroutine to find which tile	the object is standing on
 
@@ -28705,9 +27917,6 @@ loc_14942:
 ; a1 = address within 256x256 mappings where object is standing
 ;      (refers to a 16x16 tile number)
 ; ---------------------------------------------------------------------------
-
-
-
 
 FindNearestTile:
 		move.w	d2,d0		; get y-pos. of bottom edge of object
@@ -28777,9 +27986,6 @@ FindNearestTile:
 ;      (refers to a 16x16 tile number)
 ; (a4) = floor angle
 ; ---------------------------------------------------------------------------
-
-
-
 
 FindFloor:
 		bsr.s	FindNearestTile
@@ -28858,10 +28064,6 @@ FindFloor:
 		rts
 ; End of function FindFloor
 
-
-
-
-
 FindFloor2:
 		bsr.w	FindNearestTile
 		move.w	(a1),d0
@@ -28931,9 +28133,6 @@ FindFloor2:
 		not.w	d1
 		rts
 ; End of function FindFloor2
-
-
-
 
 FindWall:
 		bsr.w	FindNearestTile
@@ -29012,10 +28211,6 @@ loc_14BA6:
 		rts
 ; End of function FindWall
 
-
-
-
-
 FindWall2:
 		bsr.w	FindNearestTile
 		move.w	(a1),d0
@@ -29086,7 +28281,6 @@ loc_14C3C:
 		rts
 ; End of function FindWall2
 
-
 ; ---------------------------------------------------------------------------
 ; This subroutine takes 'raw' bitmap-like collision block data as input and
 ; converts it into the proper collision arrays (ColArray and ColArray2).
@@ -29097,9 +28291,6 @@ loc_14C3C:
 
 RawColBlocks		equ CollArray1
 ConvRowColBlocks	equ CollArray1
-
-
-
 
 ConvertCollisionArray:
 		rts
@@ -29141,7 +28332,6 @@ ConvertCollisionArray:
 		bsr.s	@convertArray
 		lea	(RawColBlocks).l,a1
 		lea	(CollArray1).l,a2	; Convert the raw collision block data into final normal collision array
-
 
 	@convertArray:
 		move.w	#$1000-1,d3		; Size of the collision array
@@ -29197,10 +28387,6 @@ ConvertCollisionArray:
 
 ; End of function ConvertCollisionArray
 
-
-
-
-
 Sonic_WalkSpeed:
 		move.l	obX(a0),d3
 		move.l	obY(a0),d2
@@ -29252,10 +28438,6 @@ loc_14D3C:
 
 ; End of function Sonic_WalkSpeed
 
-
-
-
-
 sub_14D48:
 		move.b	d0,(v_anglebuffer).w
 		move.b	d0,($FFFFF76A).w
@@ -29273,9 +28455,6 @@ sub_14D48:
 ; ---------------------------------------------------------------------------
 ; Subroutine to make Sonic land	on the floor after jumping
 ; ---------------------------------------------------------------------------
-
-
-
 
 Sonic_HitFloor:
 		move.w	obY(a0),d2
@@ -29363,12 +28542,8 @@ locret_14E16:
 ; (a4) = floor angle
 ; ---------------------------------------------------------------------------
 
-
-
-
 ObjFloorDist:
 		move.w	obX(a0),d3
-
 
 ObjFloorDist2:
 		move.w	obY(a0),d2
@@ -29391,10 +28566,6 @@ ObjFloorDist2:
 		rts
 
 ; End of function ObjFloorDist2
-
-
-
-
 
 sub_14E50:
 		move.w	obY(a0),d2
@@ -29432,10 +28603,6 @@ sub_14E50:
 
 ; End of function sub_14E50
 
-
-
-
-
 sub_14EB4:
 		move.w	obY(a0),d2
 		move.w	obX(a0),d3
@@ -29455,9 +28622,6 @@ loc_14EBC:
 ; ---------------------------------------------------------------------------
 ; Subroutine to detect when an object hits a wall to its right
 ; ---------------------------------------------------------------------------
-
-
-
 
 ObjHitWallRight:
 		add.w	obX(a0),d3
@@ -29482,9 +28646,6 @@ locret_14F06:
 ; Subroutine preventing Sonic from running on walls and	ceilings when he
 ; touches them
 ; ---------------------------------------------------------------------------
-
-
-
 
 Sonic_DontRunOnWalls:
 		move.w	obY(a0),d2
@@ -29537,9 +28698,6 @@ loc_14F7C:
 		bsr.w	FindFloor
 		move.b	#-$80,d2
 		bra.w	loc_14E0A
-
-
-
 
 ObjHitCeiling:
 		move.w	obY(a0),d2
@@ -29605,9 +28763,6 @@ loc_14FD6:
 ; Subroutine to stop Sonic when	he jumps at a wall
 ; ---------------------------------------------------------------------------
 
-
-
-
 Sonic_HitWall:
 		move.w	obY(a0),d2
 		move.w	obX(a0),d3
@@ -29627,9 +28782,6 @@ loc_1504A:
 ; ---------------------------------------------------------------------------
 ; Subroutine to detect when an object hits a wall to its left
 ; ---------------------------------------------------------------------------
-
-
-
 
 ObjHitWallLeft:
 		add.w	obX(a0),d3
@@ -29782,9 +28934,6 @@ Jun_Release:	; Routine 6
 		bsr.s	Jun_ChgPos
 		bra.w	RememberState
 
-
-
-
 Jun_ChkSwitch:
 		lea	(f_switch).w,a2
 		moveq	#0,d0
@@ -29816,10 +28965,6 @@ Jun_ChkSwitch:
 		rts
 ; End of function Jun_ChkSwitch
 
-
-
-
-
 Jun_ChgPos:
 		lea	(v_player).w,a1
 		moveq	#0,d0
@@ -29836,7 +28981,6 @@ Jun_ChgPos:
 		move.w	d0,obY(a1)
 		rts
 
-
 @data:		dc.b -$20,    0, -$1E,   $E ; disc x-pos, Sonic x-pos, disc y-pos, Sonic y-pos
 		dc.b -$18,  $18,  -$E,  $1E
 		dc.b    0,  $20,   $E,  $1E
@@ -29845,7 +28989,6 @@ Jun_ChgPos:
 		dc.b  $18, -$18,   $E, -$1E
 		dc.b    0, -$20,  -$E, -$1E
 		dc.b -$18, -$18, -$1E,  -$E
-
 
 Map_Jun:	include	"_maps\Rotating Junction.asm"
 
@@ -30011,7 +29154,6 @@ Disc_ChkDel:
 	@delete:
 		jmp	(DeleteObject).l
 
-
 Map_Disc:	include	"_maps\Running Disc.asm"
 
 ; ===========================================================================
@@ -30080,7 +29222,6 @@ Conv_Action:	; Routine 2
 
 	@notonconveyor:
 		rts
-
 
 ; ===========================================================================
 ; ---------------------------------------------------------------------------
@@ -30212,7 +29353,6 @@ Spin_Spinner:	; Routine 4
 
 	@display:
 		bra.w	RememberState
-
 
 		include	"_anim\SBZ Spinning Platforms.asm"
 Map_Trap:	include	"_maps\Trapdoor.asm"
@@ -30415,7 +29555,6 @@ Saw_Action:	; Routine 2
 
 	@sameframe04:
 		rts
-
 
 Map_Saw:	include	"_maps\Saws and Pizza Cutters.asm"
 
@@ -30749,7 +29888,6 @@ Sto_Action:	; Routine 2
 		clr.b	sto_active(a0)
 		rts
 
-
 Map_Stomp:	include	"_maps\SBZ Stomper and Door.asm"
 
 ; ===========================================================================
@@ -30859,7 +29997,6 @@ VanP_Appear:	; Routine 4
 
 	@display:
 		bra.w	RememberState
-
 
 		include	"_anim\SBZ Vanishing Platforms.asm"
 Map_VanP:	include	"_maps\SBZ Vanishing Platforms.asm"
@@ -31118,7 +30255,6 @@ loc_16480:
 loc_16484:
 		jmp	(SpeedToPos).l
 
-
 		include	"_anim\SBZ Spin Platform Conveyor.asm"
 
 off_164A6:	dc.w word_164B2-off_164A6, word_164C6-off_164A6, word_164DA-off_164A6
@@ -31217,7 +30353,6 @@ Gird_ChgMove:
 		dc.w	  0,  $100,   $30,     0 ; down
 		dc.w  -$100,  -$40,   $60,     0 ; up/left
 		dc.w	  0, -$100,   $18,     0 ; up
-
 
 Map_Gird:	include	"_maps\Girder Block.asm"
 
@@ -31367,9 +30502,6 @@ loc_16800:
 		move.w	#$200,obVelY(a1)
 		rts
 
-
-
-
 sub_1681C:
 		moveq	#0,d0
 		move.w	#$1000,d2
@@ -31464,7 +30596,6 @@ Tele_Data:	dc.w @type00-Tele_Data, @type01-Tele_Data, @type02-Tele_Data
 		dc.w $14A4, $FF98, $1494
 		dc.w $FF70, $1494, $FD90
 @type07:	dc.w 4,	$894, $90
-
 
 ; ===========================================================================
 ; ---------------------------------------------------------------------------
@@ -31857,7 +30988,6 @@ loc_16CE0:
 		bpl.w	Cat_ChkGone
 		jmp	(DisplaySprite).l
 
-
 		include	"_anim\Caterkiller.asm"
 Map_Cat:	include	"_maps\Caterkiller.asm"
 
@@ -32028,9 +31158,6 @@ Lamp_StoreInfo:
 ; Subroutine to load stored info when you start	a level	from a lamppost
 ; ---------------------------------------------------------------------------
 
-
-
-
 Lamp_LoadInfo:
 		move.b	($FFFFFE31).w,(v_lastlamp).w
 		move.w	($FFFFFE32).w,(v_player+obX).w
@@ -32148,7 +31275,6 @@ Bonus_Display:	; Routine 2
 
 Bonus_Display_Delete:
 		jmp	(DeleteObject).l
-
 
 Map_Bonus:	include	"_maps\Hidden Bonuses.asm"
 
@@ -32325,13 +31451,9 @@ loc_1784C:
 		move.w	#$B3,$3C(a0)
 		rts
 
-
 ; ---------------------------------------------------------------------------
 ; Defeated boss subroutine
 ; ---------------------------------------------------------------------------
-
-
-
 
 BossDefeated:
 		move.b	(v_vbla_byte).w,d0
@@ -32361,9 +31483,6 @@ locret_178A2:
 ; Subroutine to move a boss
 ; ---------------------------------------------------------------------------
 
-
-
-
 BossMove:
 		move.l	$30(a0),d2
 		move.l	$38(a0),d3
@@ -32381,7 +31500,6 @@ BossMove:
 ; End of function BossMove
 
 ; ===========================================================================
-
 
 BGHZ_MakeBall:
 		move.w	#-$100,obVelX(a0)
@@ -32606,8 +31724,6 @@ BGHZ_Display:
 		or.b	d0,obRender(a0)
 		jmp	(DisplaySprite).l
 
-
-
 ; ===========================================================================
 ; ---------------------------------------------------------------------------
 ; Object 48 - ball on a chain that Eggman swings (GHZ)
@@ -32722,9 +31838,6 @@ GBall_Display2:	; Routine 4
 		jsr	(Obj48_Move).l
 		jmp	(DisplaySprite).l
 
-
-
-
 sub_17C2A:
 		movea.l	$34(a0),a1
 		addi.b	#$20,obAniFrame(a0)
@@ -32779,7 +31892,6 @@ GBall_Vanish:
 
 GBall_Display4:
 		jmp	(DisplaySprite).l
-
 
 		include	"_anim\Eggman.asm"
 Map_Eggman:	include	"_maps\Eggman.asm"
@@ -33186,7 +32298,6 @@ Obj77_Display:
 		andi.b	#$FC,obRender(a0)
 		or.b	d0,obRender(a0)
 		jmp	(DisplaySprite).l
-
 
 ; ===========================================================================
 ; ---------------------------------------------------------------------------
@@ -33632,7 +32743,6 @@ loc_18688:
 Obj73_TubeDel:
 		jmp	(DeleteObject).l
 
-
 ; ===========================================================================
 ; ---------------------------------------------------------------------------
 ; Object 74 - lava that Eggman drops (MZ)
@@ -33741,9 +32851,6 @@ loc_187CA:
 		addq.b	#2,ob2ndRout(a0)
 		rts
 
-
-
-
 Obj74_Duplicate2:
 		jsr	(FindNextFreeObj).l
 		bne.s	locret_187EE
@@ -33838,7 +32945,6 @@ Obj74_Animate:
 
 Obj74_Delete3:	; Routine 6
 		jmp	(DeleteObject).l
-
 
 	Obj7A_Delete:
 		jmp	(DeleteObject).l
@@ -34622,7 +33728,6 @@ Obj7B_MoveFrag:	; Routine $A
 		bpl.w	Obj7A_Delete
 		rts
 
-
 Map_BSBall:	include	"_maps\SLZ Boss Spikeball.asm"
 
 ; ===========================================================================
@@ -34963,9 +34068,6 @@ loc_19438:
 loc_19446:
 		bra.w	loc_19202
 
-
-
-
 Obj75_FindBlocks:
 		clr.w	$36(a0)
 		lea	(v_objspace+$40).w,a1
@@ -35233,7 +34335,6 @@ loc_19688:
 Obj75_SpikeDelete:
 		jmp	(DeleteObject).l
 
-
 ; ===========================================================================
 ; ---------------------------------------------------------------------------
 ; Object 76 - blocks that Eggman picks up (SYZ)
@@ -35332,9 +34433,6 @@ loc_19762:	; Routine 4
 Obj76_Delete:
 		jmp	(DeleteObject).l
 
-
-
-
 Obj76_Break:
 		lea	Obj76_FragSpeed(pc),a4
 		lea	Obj76_FragPos(pc),a5
@@ -35388,7 +34486,6 @@ Obj76_FragPos:	dc.w -8, -8
 		dc.w $10, 0
 		dc.w 0,	$10
 		dc.w $10, $10
-
 
 Map_BossBlock:	include	"_maps\SYZ Boss Blocks.asm"
 
@@ -35553,7 +34650,6 @@ loc_199E6:
 
 SEgg_SwDisplay:
 		jmp	(DisplaySprite).l
-
 
 		include	"_anim\Eggman - Scrap Brain 2 & Final.asm"
 Map_SEgg:	include	"_maps\Eggman - Scrap Brain 2.asm"
@@ -35722,7 +34818,6 @@ FFloor_FragPos:	dc.w -8, -8
 		dc.w $10, 0
 		dc.w 0,	$10
 		dc.w $10, $10
-
 
 Map_FFloor:	include	"_maps\SBZ Eggman's Crumbling Floor.asm"
 
@@ -36310,7 +35405,6 @@ loc_1A3AC:	; Routine $C
 loc_1A3D0:
 		bra.w	loc_1A2A6
 
-
 		include	"_anim\FZ Eggman in Ship.asm"
 Map_FZDamaged:	include	"_maps\FZ Damaged Eggmobile.asm"
 Map_FZLegs:	include	"_maps\FZ Eggmobile Legs.asm"
@@ -36520,7 +35614,6 @@ loc_1A656:
 locret_1A674:
 		rts
 
-
 Map_EggCyl:	include	"_maps\FZ Eggman's Cylinders.asm"
 
 ; ===========================================================================
@@ -36720,7 +35813,6 @@ loc_1AA34:
 		movea.l	$34(a0),a1
 		subq.w	#1,$38(a1)
 		bra.w	Obj84_Delete
-
 
 		include	"_anim\Plasma Ball Launcher.asm"
 Map_PLaunch:	include	"_maps\Plasma Ball Launcher.asm"
@@ -36932,16 +36024,12 @@ Pri_EndAct:	; Routine $E
 	@found:
 		rts
 
-
 		include	"_anim\Prison Capsule.asm"
 Map_Pri:	include	"_maps\Prison Capsule.asm"
 
 ; ---------------------------------------------------------------------------
 ; Subroutine to react to obColType(a0)
 ; ---------------------------------------------------------------------------
-
-
-
 
 ReactToItem:
 		nop
@@ -37192,9 +36280,6 @@ React_ChkHurt:
 ; Hurting Sonic subroutine
 ; ---------------------------------------------------------------------------
 
-
-
-
 HurtSonic:
 		tst.b	(v_shield).w	; does Sonic have a shield?
 		bne.s	@hasshield	; if yes, branch
@@ -37251,9 +36336,6 @@ HurtSonic:
 ; Subroutine to kill Sonic
 ; ---------------------------------------------------------------------------
 
-
-
-
 KillSonic:
 		tst.w	(v_debuguse).w	; is debug mode active?
 		bne.s	@dontdie	; if yes, branch
@@ -37279,10 +36361,6 @@ KillSonic:
 		moveq	#-1,d0
 		rts
 ; End of function KillSonic
-
-
-
-
 
 React_Special:
 		move.b	obColType(a1),d1
@@ -37337,13 +36415,9 @@ React_Special:
 		rts
 ; End of function React_Special
 
-
 ; ---------------------------------------------------------------------------
 ; Subroutine to show the special stage layout
 ; ---------------------------------------------------------------------------
-
-
-
 
 SS_ShowLayout:
 		bsr.w	SS_AniWallsRings
@@ -37473,9 +36547,6 @@ loc_1B288:
 ; Subroutine to animate	walls and rings	in the special stage
 ; ---------------------------------------------------------------------------
 
-
-
-
 SS_AniWallsRings:
 		lea	($FF400C).l,a1
 		moveq	#0,d0
@@ -37597,9 +36668,6 @@ SS_WaRiVramSet:	dc.w $142, $6142, $142,	$142, $142, $142, $142,	$6142
 ; Subroutine to remove items when you collect them in the special stage
 ; ---------------------------------------------------------------------------
 
-
-
-
 SS_RemoveCollectedItem:
 		lea	($FF4400).l,a2
 		move.w	#$1F,d0
@@ -37617,9 +36685,6 @@ locret_1B4CE:
 ; ---------------------------------------------------------------------------
 ; Subroutine to animate	special	stage items when you touch them
 ; ---------------------------------------------------------------------------
-
-
-
 
 SS_AniItems:
 		lea	($FF4400).l,a0
@@ -37808,13 +36873,9 @@ SS_StartLoc:
 		incbin	"startpos\ss6.bin"
 		even
 
-
 ; ---------------------------------------------------------------------------
 ; Subroutine to load special stage layout
 ; ---------------------------------------------------------------------------
-
-
-
 
 SS_Load:
 		moveq	#0,d0
@@ -38144,9 +37205,6 @@ Obj09_Display:
 		jsr	(Sonic_Animate).l
 		rts
 
-
-
-
 Obj09_Move:
 		btst	#bitL,(v_jpadhold2).w ; is left being pressed?
 		beq.s	Obj09_ChkRight	; if not, branch
@@ -38208,10 +37266,6 @@ loc_1BAF2:
 		rts
 ; End of function Obj09_Move
 
-
-
-
-
 Obj09_MoveLeft:
 		bset	#0,obStatus(a0)
 		move.w	obInertia(a0),d0
@@ -38239,10 +37293,6 @@ loc_1BB22:
 		rts
 ; End of function Obj09_MoveLeft
 
-
-
-
-
 Obj09_MoveRight:
 		bclr	#0,obStatus(a0)
 		move.w	obInertia(a0),d0
@@ -38269,10 +37319,6 @@ locret_1BB54:
 		rts
 ; End of function Obj09_MoveRight
 
-
-
-
-
 Obj09_Jump:
 		move.b	(v_jpadpress2).w,d0
 		andi.b	#btnABC,d0	; is A, B or C pressed?
@@ -38296,10 +37342,6 @@ Obj09_NoJump:
 		rts
 ; End of function Obj09_Jump
 
-
-
-
-
 nullsub_2:
 		rts
 ; End of function nullsub_2
@@ -38321,9 +37363,6 @@ locret_1BBB4:
 ; ---------------------------------------------------------------------------
 ; Subroutine to fix the	camera on Sonic's position (special stage)
 ; ---------------------------------------------------------------------------
-
-
-
 
 SS_FixCamera:
 		move.w	obY(a0),d2
@@ -38381,9 +37420,6 @@ loc_1BC40:
 		jsr	(Sonic_LoadGfx).l
 		bsr.w	SS_FixCamera
 		jmp	(DisplaySprite).l
-
-
-
 
 Obj09_Fall:
 		move.l	obY(a0),d2
@@ -38443,10 +37479,6 @@ loc_1BCD4:
 		rts
 ; End of function Obj09_Fall
 
-
-
-
-
 sub_1BCE8:
 		lea	($FF0000).l,a1
 		moveq	#0,d4
@@ -38478,10 +37510,6 @@ sub_1BCE8:
 		rts
 ; End of function sub_1BCE8
 
-
-
-
-
 sub_1BD30:
 		beq.s	locret_1BD44
 		cmpi.b	#$28,d4
@@ -38501,10 +37529,6 @@ loc_1BD46:
 		moveq	#-1,d5
 		rts
 ; End of function sub_1BD30
-
-
-
-
 
 Obj09_ChkItems:
 		lea	($FF0000).l,a1
@@ -38636,10 +37660,6 @@ Obj09_GhostNotSolid:
 		moveq	#0,d4
 		rts
 ; End of function Obj09_ChkItems
-
-
-
-
 
 Obj09_ChkItems2:
 		move.b	$30(a0),d0
@@ -38792,7 +37812,6 @@ Obj09_NoGlass:
 		rts
 ; End of function Obj09_ChkItems2
 
-
 ; ---------------------------------------------------------------------------
 ; Object 10 - blank
 ; ---------------------------------------------------------------------------
@@ -38803,9 +37822,6 @@ Obj10:
 ; ---------------------------------------------------------------------------
 ; Subroutine to animate	level graphics
 ; ---------------------------------------------------------------------------
-
-
-
 
 AnimateLevelGfx:
 		tst.w	(f_pause).w	; is the game paused?
@@ -39188,9 +38204,6 @@ AniArt_none:
 ; d1 = number of tiles to load (minus one)
 ; ---------------------------------------------------------------------------
 
-
-
-
 LoadTiles:
 		move.l	(a1)+,(a6)
 		move.l	(a1)+,(a6)
@@ -39358,9 +38371,6 @@ loc_1C4FA:
 ; Animated pattern routine - giant ring
 ; ---------------------------------------------------------------------------
 
-
-
-
 AniArt_GiantRing:
 
 @size:		equ 14
@@ -39389,8 +38399,6 @@ AniArt_GiantRing:
 		bra.w	LoadTiles
 
 ; End of function AniArt_GiantRing
-
-
 
 ; ===========================================================================
 ; ---------------------------------------------------------------------------
@@ -39443,9 +38451,6 @@ Map_HUD:	include	"_maps\HUD.asm"
 ; Add points subroutine
 ; ---------------------------------------------------------------------------
 
-
-
-
 AddPoints:
 		move.b	#1,(f_scorecount).w ; set score counter to update
 
@@ -39495,8 +38500,6 @@ AddPoints:
 ; ---------------------------------------------------------------------------
 ; Subroutine to update the HUD
 ; ---------------------------------------------------------------------------
-
-
 
 HUD_Update:
 		tst.w	(f_debugmode).w	; is debug mode on?
@@ -39629,9 +38632,6 @@ HudDebug:
 ; Subroutine to load "0" on the	HUD
 ; ---------------------------------------------------------------------------
 
-
-
-
 Hud_LoadZero:
 		locVRAM	$DF40
 		lea	Hud_TilesZero(pc),a2
@@ -39642,9 +38642,6 @@ Hud_LoadZero:
 ; ---------------------------------------------------------------------------
 ; Subroutine to load uncompressed HUD patterns ("E", "0", colon)
 ; ---------------------------------------------------------------------------
-
-
-
 
 Hud_Base:
 		lea	($C00000).l,a6
@@ -39688,9 +38685,6 @@ Hud_TilesZero:	dc.b $FF, $FF, 0, 0
 ; Subroutine to load debug mode	numbers	patterns
 ; ---------------------------------------------------------------------------
 
-
-
-
 HudDb_XY:
 		locVRAM	$DC40		; set VRAM address
 		move.w	(v_screenposx).w,d1 ; load camera x-position
@@ -39701,10 +38695,6 @@ HudDb_XY:
 		swap	d1
 		move.w	(v_player+obY).w,d1 ; load Sonic's y-position
 ; End of function HudDb_XY
-
-
-
-
 
 HudDb_XY2:
 		moveq	#7,d6
@@ -39739,9 +38729,6 @@ loc_1C8B2:
 ; Subroutine to load rings numbers patterns
 ; ---------------------------------------------------------------------------
 
-
-
-
 Hud_Rings:
 		lea	(Hud_100).l,a2
 		moveq	#2,d6
@@ -39751,9 +38738,6 @@ Hud_Rings:
 ; ---------------------------------------------------------------------------
 ; Subroutine to load score numbers patterns
 ; ---------------------------------------------------------------------------
-
-
-
 
 Hud_Score:
 		lea	(Hud_100000).l,a2
@@ -39811,13 +38795,9 @@ loc_1C92C:
 
 ; End of function Hud_Score
 
-
 ; ---------------------------------------------------------------------------
 ; Subroutine to load countdown numbers on the continue screen
 ; ---------------------------------------------------------------------------
-
-
-
 
 ContScrCounter:
 		locVRAM	$DF80
@@ -39879,18 +38859,11 @@ Hud_1:		dc.l 1
 ; Subroutine to load time numbers patterns
 ; ---------------------------------------------------------------------------
 
-
-
-
 Hud_Mins:
 		lea	(Hud_1).l,a2
 		moveq	#0,d6
 		bra.s	loc_1C9BA
 ; End of function Hud_Mins
-
-
-
-
 
 Hud_Secs:
 		lea	(Hud_10).l,a2
@@ -39946,9 +38919,6 @@ loc_1C9D6:
 ; ---------------------------------------------------------------------------
 ; Subroutine to load time/ring bonus numbers patterns
 ; ---------------------------------------------------------------------------
-
-
-
 
 Hud_TimeRingBonus:
 		lea	(Hud_1000).l,a2
@@ -40015,9 +38985,6 @@ Hud_ClrBonusLoop:
 ; Subroutine to load uncompressed lives	counter	patterns
 ; ---------------------------------------------------------------------------
 
-
-
-
 Hud_Lives:
 		locVRAM	$FBA0,d0	; set VRAM address
 		moveq	#0,d1
@@ -40078,7 +39045,6 @@ Hud_ClrLivesLoop:
 		dbf	d5,Hud_ClrLivesLoop
 		bra.s	loc_1CABC
 ; End of function Hud_Lives
-
 
 Art_Hud:	incbin	"artunc\HUD Numbers.bin" ; 8x16 pixel numbers on HUD
 		even
@@ -40152,9 +39118,6 @@ Debug_Action:	; Routine 2
 		move.w	(a2)+,d6
 		bsr.w	Debug_Control
 		jmp	(DisplaySprite).l
-
-
-
 
 Debug_Control:
 		moveq	#0,d4
@@ -40288,10 +39251,6 @@ Debug_ChgItem:
 	@stayindebug:
 		rts
 ; End of function Debug_Control
-
-
-
-
 
 Debug_ShowItem:
 		moveq	#0,d0
@@ -40500,7 +39459,6 @@ dbug:	macro map,object,subtype,frame,vram
 		@Endingend:
 
 		even
-
 
 ; ---------------------------------------------------------------------------
 ; Level Headers
@@ -40961,7 +39919,6 @@ plcid_Ending:		equ (ptr_PLC_Ending-ArtLoadCues)/2	; $1C
 plcid_TryAgain:		equ (ptr_PLC_TryAgain-ArtLoadCues)/2	; $1D
 plcid_EggmanSBZ2:	equ (ptr_PLC_EggmanSBZ2-ArtLoadCues)/2	; $1E
 plcid_FZBoss:		equ (ptr_PLC_FZBoss-ArtLoadCues)/2	; $1F
-
 
 		align	$200,$FF
 		if Revision=0
@@ -41579,7 +40536,6 @@ Level_End:	incbin	"levels\ending.bin"
 		even
 byte_6A320:	dc.b 0,	0, 0, 0
 
-
 Art_BigRing:	incbin	"artunc\Giant Ring.bin"
 		even
 
@@ -41739,6 +40695,5 @@ SoundDriver:	include "sound\s1.sounddriver.asm"
 ; end of 'ROM'
 		even
 EndOfRom:
-
 
 		END
