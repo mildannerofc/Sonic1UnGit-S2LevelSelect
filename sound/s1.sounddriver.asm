@@ -105,27 +105,6 @@ SoundPriorities:
 
 ; sub_71B4C:
 UpdateMusic:
-;
-; 		nop
-; 		nop
-; 		nop
-; ; loc_71B5A:
-; @updateloop:
-; 		btst	#0,(z80_bus_request).l		; Is the z80 busy?
-; 		bne.s	@updateloop			; If so, wait
-;
-; 		btst	#7,(z80_dac_status).l		; Is DAC accepting new samples?
-; 		beq.s	@driverinput			; Branch if yes
-;
-; 		nop
-; 		nop
-; 		nop
-; 		nop
-; 		nop
-; 		bra.s	UpdateMusic
-; ; ===========================================================================
-; ; loc_71B82:
-; @driverinput:
 		lea	(v_snddriver_ram&$FFFFFF).l,a6
 		clr.b	f_voice_selector(a6)
 		tst.b	f_pausemusic(a6)		; is music paused?

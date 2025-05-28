@@ -1001,28 +1001,6 @@ ClearScreen:
 		dbf	d1,@clearhscroll ; clear hscroll table (in RAM)
 		rts
 ; End of function ClearScreen
-
-; ---------------------------------------------------------------------------
-; Subroutine to load the sound driver
-; ---------------------------------------------------------------------------
-
-; SoundDriverLoad:
-; 		nop
-; ;
-; ;
-; ; 		lea	(Kos_Z80).l,a0	; load sound driver
-; ; 		lea	(z80_ram).l,a1	; target Z80 RAM
-; ; 		bsr.w	KosDec		; decompress
-; ;
-; ; 		nop
-; ; 		nop
-; ; 		nop
-; ; 		nop
-; ;
-; ;
-; 		rts
-; End of function SoundDriverLoad
-
 ; ---------------------------------------------------------------------------
 ; Subroutine to play a music track
 
