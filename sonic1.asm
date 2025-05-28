@@ -303,9 +303,21 @@ GameInit:
 		dbf	d6,@clearRAM	; clear RAM ($0000-$FDFF)
 
 		bsr.w	VDPSetupGame
-		bsr.w	SoundDriverLoad
 		bsr.w	JoypadInit
 		move.b	#id_Sega,(v_gamemode).w ; set Game Mode to Sega Screen
+		jsr     MegaPCM_LoadDriver
+        lea     SampleTable, a0
+        jsr     MegaPCM_LoadSampleTable
+		tst.w   d0                      ; was sample table loaded successfully?
+		beq.s   @SampleTableOk          ; if yes, branch
+		illegal
+;                 ifdef __DEBUG__
+;                     ; for MD Debugger v.2.5 or above
+;                     RaiseError "MegaPCM_LoadSampleTable returned %<.b d0>", MPCM_Debugger_LoadSampleTableException
+;                 else
+;                     illegal
+;                 endif
+@SampleTableOk:
 
 MainGameLoop:
 		move.b	(v_gamemode).w,d0 ; load Game Mode
@@ -564,8 +576,8 @@ VBla_00:
 
 	@notPAL:
 		move.w	#1,(f_hbla_pal).w ; set HBlank flag
-		stopZ80
-		waitZ80
+
+
 		tst.b	(f_wtr_state).w	; is water above top of screen?
 		bne.s	@waterabove 	; if yes, branch
 
@@ -577,7 +589,7 @@ VBla_00:
 
 	@waterbelow:
 		move.w	(v_hbla_hreg).w,(a5)
-		startZ80
+
 		bra.w	VBla_Music
 ; ===========================================================================
 
@@ -615,8 +627,8 @@ VBla_10:
 		beq.w	VBla_0A		; if yes, branch
 
 VBla_08:
-		stopZ80
-		waitZ80
+
+
 		bsr.w	ReadJoypads
 		tst.b	(f_wtr_state).w
 		bne.s	@waterabove
@@ -639,7 +651,7 @@ VBla_08:
 		move.b	#0,(f_sonframechg).w
 
 	@nochg:
-		startZ80
+
 		movem.l	(v_screenposx).w,d0-d7
 		movem.l	d0-d7,(v_screenposx_dup).w
 		movem.l	(v_fg_scroll_flags).w,d0-d1
@@ -670,13 +682,13 @@ Demo_Time:
 ; ===========================================================================
 
 VBla_0A:
-		stopZ80
-		waitZ80
+
+
 		bsr.w	ReadJoypads
 		writeCRAM	v_pal_dry,$80,0
 		writeVRAM	v_spritetablebuffer,$280,vram_sprites
 		writeVRAM	v_hscrolltablebuffer,$380,vram_hscroll
-		startZ80
+
 		bsr.w	PalCycle_SS
 		tst.b	(f_sonframechg).w ; has Sonic's sprite changed?
 		beq.s	@nochg		; if not, branch
@@ -694,8 +706,8 @@ VBla_0A:
 ; ===========================================================================
 
 VBla_0C:
-		stopZ80
-		waitZ80
+
+
 		bsr.w	ReadJoypads
 		tst.b	(f_wtr_state).w
 		bne.s	@waterabove
@@ -716,7 +728,7 @@ VBla_0C:
 		move.b	#0,(f_sonframechg).w
 
 	@nochg:
-		startZ80
+
 		movem.l	(v_screenposx).w,d0-d7
 		movem.l	d0-d7,(v_screenposx_dup).w
 		movem.l	(v_fg_scroll_flags).w,d0-d1
@@ -742,13 +754,13 @@ VBla_12:
 ; ===========================================================================
 
 VBla_16:
-		stopZ80
-		waitZ80
+
+
 		bsr.w	ReadJoypads
 		writeCRAM	v_pal_dry,$80,0
 		writeVRAM	v_spritetablebuffer,$280,vram_sprites
 		writeVRAM	v_hscrolltablebuffer,$380,vram_hscroll
-		startZ80
+
 		tst.b	(f_sonframechg).w
 		beq.s	@nochg
 		writeVRAM	v_sgfx_buffer,$2E0,vram_sonic
@@ -763,8 +775,8 @@ VBla_16:
 		rts
 
 sub_106E:
-		stopZ80
-		waitZ80
+
+
 		bsr.w	ReadJoypads
 		tst.b	(f_wtr_state).w ; is water above top of screen?
 		bne.s	@waterabove	; if yes, branch
@@ -777,7 +789,7 @@ sub_106E:
 	@waterbelow:
 		writeVRAM	v_spritetablebuffer,$280,vram_sprites
 		writeVRAM	v_hscrolltablebuffer,$380,vram_hscroll
-		startZ80
+
 		rts
 ; End of function sub_106E
 
@@ -849,13 +861,13 @@ loc_119E:
 ; ---------------------------------------------------------------------------
 
 JoypadInit:
-		stopZ80
-		waitZ80
+
+
 		moveq	#$40,d0
 		move.b	d0,($A10009).l	; init port 1 (joypad 1)
 		move.b	d0,($A1000B).l	; init port 2 (joypad 2)
 		move.b	d0,($A1000D).l	; init port 3 (expansion/extra)
-		startZ80
+
 		rts
 ; End of function JoypadInit
 
@@ -994,21 +1006,21 @@ ClearScreen:
 ; Subroutine to load the sound driver
 ; ---------------------------------------------------------------------------
 
-SoundDriverLoad:
-		nop
-		stopZ80
-		resetZ80
-		lea	(Kos_Z80).l,a0	; load sound driver
-		lea	(z80_ram).l,a1	; target Z80 RAM
-		bsr.w	KosDec		; decompress
-		resetZ80a
-		nop
-		nop
-		nop
-		nop
-		resetZ80
-		startZ80
-		rts
+; SoundDriverLoad:
+; 		nop
+; ;
+; ;
+; ; 		lea	(Kos_Z80).l,a0	; load sound driver
+; ; 		lea	(z80_ram).l,a1	; target Z80 RAM
+; ; 		bsr.w	KosDec		; decompress
+; ;
+; ; 		nop
+; ; 		nop
+; ; 		nop
+; ; 		nop
+; ;
+; ;
+; 		rts
 ; End of function SoundDriverLoad
 
 ; ---------------------------------------------------------------------------
@@ -2981,7 +2993,8 @@ Sega_WaitPal:
 		bsr.w	PlaySound_Special	; play "SEGA" sound
 		move.b	#$14,(v_vbla_routine).w
 		bsr.w	WaitForVBla
-		move.w	#$1E,(v_demolength).w
+		move.w  #$1E+2*60,(v_demolength).w
+
 
 Sega_WaitEnd:
 		move.b	#2,(v_vbla_routine).w
@@ -3007,7 +3020,6 @@ GM_Title:
 		bsr.w	ClearPLC
 		bsr.w	PaletteFadeOut
 		disable_ints
-		bsr.w	SoundDriverLoad
 		lea	(vdp_control_port).l,a6
 		move.w	#$8004,(a6)	; 8-colour mode
 		move.w	#$8200+(vram_fg>>10),(a6) ; set foreground nametable address
@@ -38663,6 +38675,10 @@ ObjPos_Null:	dc.b $FF, $FF, 0, 0, 0,	0
 
 		dcb.b $63C,$FF
 		;dcb.b ($10000-(*%$10000))-(EndOfRom-SoundDriver),$FF
+
+		include "sound\MegaPCM.asm"
+		include "sound\SampleTable.asm"
+
 SoundDriver:	include "sound\s1.sounddriver.asm"
 		even
 
