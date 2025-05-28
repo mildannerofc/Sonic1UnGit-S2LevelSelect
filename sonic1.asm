@@ -3052,6 +3052,7 @@ Sega_GotoTitle:
 ; Title screen
 ; ---------------------------------------------------------------------------
 
+; TitleScreen:
 GM_Title:
 		move.b	#bgm_Stop,d0
 		bsr.w	PlaySound_Special ; stop music
@@ -3166,20 +3167,15 @@ GM_Title:
 		move.b	#0,(f_debugmode).w ; disable debug mode
 		move.w	#$178,(v_demolength).w ; run title screen for $178 frames
 
-		; Bug: this only clears half of the "SONIC TEAM PRESENTS" slot.
-		; This is responsible for why the "PRESS START BUTTON" text doesn't
-		; show up, as the routine ID isn't reset.
 		lea	(v_sonicteam).w,a1
 		moveq	#0,d0
-		move.w	#7,d1			; should be $F
-
+		move.w	#$F,d1			; was 7, changed to $F to fix the PRESS START BUTTON bug
 	Tit_ClrObj2:
 		move.l	d0,(a1)+
 		dbf	d1,Tit_ClrObj2
 
 		move.b	#id_TitleSonic,(v_titlesonic).w ; load big Sonic object
 		move.b	#id_PSBTM,(v_pressstart).w ; load "PRESS START BUTTON" object
-		;clr.b (v_pressstart+obRoutine).w ; The 'Mega Games 10' version of Sonic 1 added this line, to fix the 'PRESS START BUTTON' object not appearing
 
 		tst.b   (v_megadrive).w	; is console Japanese?
 		bpl.s   @isjap		; if yes, branch
@@ -3646,7 +3642,7 @@ LevSel_ChgLine:
 ; ---------------------------------------------------------------------------
 ; Level select menu text
 ; ---------------------------------------------------------------------------
-LevelMenuText:	incbin	"misc\Level Select Text (JP1).bin"
+LevelMenuText:	incbin	"misc\Level Select Text.bin"
 		even
 ; ---------------------------------------------------------------------------
 ; Music playlist
@@ -6481,14 +6477,14 @@ LevelSizeArray:
 ; Ending start location array
 ; ---------------------------------------------------------------------------
 EndingStLocArray:
-		incbin	"startpos\ghz1 (Credits demo 1).bin"
-		incbin	"startpos\mz2 (Credits demo).bin"
-		incbin	"startpos\syz3 (Credits demo).bin"
-		incbin	"startpos\lz3 (Credits demo).bin"
-		incbin	"startpos\slz3 (Credits demo).bin"
-		incbin	"startpos\sbz1 (Credits demo).bin"
-		incbin	"startpos\sbz2 (Credits demo).bin"
-		incbin	"startpos\ghz1 (Credits demo 2).bin"
+		incbin	"startpos\credits\ghz1 (Credits demo 1).bin"
+		incbin	"startpos\credits\mz2 (Credits demo).bin"
+		incbin	"startpos\credits\syz3 (Credits demo).bin"
+		incbin	"startpos\credits\lz3 (Credits demo).bin"
+		incbin	"startpos\credits\slz3 (Credits demo).bin"
+		incbin	"startpos\credits\sbz1 (Credits demo).bin"
+		incbin	"startpos\credits\sbz2 (Credits demo).bin"
+		incbin	"startpos\credits\ghz1 (Credits demo 2).bin"
 		even
 
 ; ===========================================================================
@@ -8104,7 +8100,6 @@ locj_701C:
 		dbf	d6,locj_6FF4
 		clr.b	(a2)
 		rts
-
 
 ; Don't be fooled by the name: this function's for drawing from left to right
 ; when the camera's moving up or down
@@ -12670,7 +12665,7 @@ Flash_Delete:	; Routine 4
 		bra.w	DeleteObject
 
 		include	"_anim\Rings.asm"
-Map_Ring:	include	"_maps\Rings (JP1).asm"
+Map_Ring:	include	"_maps\Rings.asm"
 Map_GRing:	include	"_maps\Giant Ring.asm"
 Map_Flash:	include	"_maps\Ring Flash.asm"
 
@@ -27339,10 +27334,7 @@ loc_1504A:
 ObjHitWallLeft:
 		add.w	obX(a0),d3
 		move.w	obY(a0),d2
-		; Engine bug: colliding with left walls is erratic with this function.
-		; The cause is this: a missing instruction to flip collision on the found
-		; 16x16 block; this one:
-		;eori.w #$F,d3
+		eori.w	#$F,d3
 		lea	(v_anglebuffer).w,a4
 		move.b	#0,(a4)
 		movea.w	#-$10,a3
@@ -38363,9 +38355,9 @@ plcid_FZBoss:		equ (ptr_PLC_FZBoss-ArtLoadCues)/2	; $1F
 
 		align	$200,$FF
 		dcb.b	$300,$FF
-Nem_SegaLogo:	incbin	"artnem\Sega Logo (JP1).bin" ; large Sega logo
+Nem_SegaLogo:	incbin	"artnem\Sega Logo.bin" ; large Sega logo
 		even
-Eni_SegaLogo:	incbin	"tilemaps\Sega Logo (JP1).bin" ; large Sega logo (mappings)
+Eni_SegaLogo:	incbin	"tilemaps\Sega Logo.bin" ; large Sega logo (mappings)
 		even
 Eni_Title:	incbin	"tilemaps\Title Screen.bin" ; title screen foreground (mappings)
 		even
@@ -38684,7 +38676,7 @@ Blk16_MZ:	incbin	"map16\MZ.bin"
 		even
 Nem_MZ:		incbin	"artnem\8x8 - MZ.bin"	; MZ primary patterns
 		even
-Blk256_MZ:	incbin	"map256\MZ (JP1).bin"
+Blk256_MZ:	incbin	"map256\MZ.bin"
 		even
 Blk16_SLZ:	incbin	"map16\SLZ.bin"
 		even
@@ -38702,7 +38694,7 @@ Blk16_SBZ:	incbin	"map16\SBZ.bin"
 		even
 Nem_SBZ:	incbin	"artnem\8x8 - SBZ.bin"	; SBZ primary patterns
 		even
-Blk256_SBZ:	incbin	"map256\SBZ (JP1).bin"
+Blk256_SBZ:	incbin	"map256\SBZ.bin"
 		even
 ; ---------------------------------------------------------------------------
 ; Compressed graphics - bosses and ending sequence
@@ -38727,7 +38719,7 @@ Nem_EndSonic:	incbin	"artnem\Ending - Sonic.bin"
 		even
 Nem_TryAgain:	incbin	"artnem\Ending - Try Again.bin"
 		even
-Kos_EndFlowers:	incbin	"artkos\Flowers at Ending.bin" ; ending sequence animated flowers
+Kos_EndFlowers:	incbin	"misc\Flowers at Ending (Kosinski).bin"
 		even
 Nem_EndFlower:	incbin	"artnem\Ending - Flowers.bin"
 		even
@@ -38769,9 +38761,9 @@ SS_3:		incbin	"sslayout\3.bin"
 		even
 SS_4:		incbin	"sslayout\4.bin"
 		even
-SS_5:		incbin	"sslayout\5 (JP1).bin"
+SS_5:		incbin	"sslayout\5.bin"
 		even
-SS_6:		incbin	"sslayout\6 (JP1).bin"
+SS_6:		incbin	"sslayout\6.bin"
 		even
 ; ---------------------------------------------------------------------------
 ; Animated uncompressed graphics
@@ -38888,7 +38880,7 @@ byte_69B84:	dc.b 0,	0, 0, 0
 
 Level_SYZ1:	incbin	"levels\syz1.bin"
 		even
-Level_SYZbg:	incbin	"levels\syzbg (JP1).bin"
+Level_SYZbg:	incbin	"levels\syzbg.bin"
 		even
 byte_69C7E:	dc.b 0,	0, 0, 0
 Level_SYZ2:	incbin	"levels\syz2.bin"
@@ -38974,13 +38966,13 @@ ObjPos_GHZ1:	incbin	"objpos\ghz1.bin"
 		even
 ObjPos_GHZ2:	incbin	"objpos\ghz2.bin"
 		even
-ObjPos_GHZ3:	incbin	"objpos\ghz3 (JP1).bin"
+ObjPos_GHZ3:	incbin	"objpos\ghz3.bin"
 		even
-ObjPos_LZ1:	incbin	"objpos\lz1 (JP1).bin"
+ObjPos_LZ1:	incbin	"objpos\lz1.bin"
 		even
 ObjPos_LZ2:	incbin	"objpos\lz2.bin"
 		even
-ObjPos_LZ3:	incbin	"objpos\lz3 (JP1).bin"
+ObjPos_LZ3:	incbin	"objpos\lz3.bin"
 		even
 ObjPos_SBZ3:	incbin	"objpos\sbz3.bin"
 		even
@@ -38996,7 +38988,7 @@ ObjPos_LZ3pf1:	incbin	"objpos\lz3pf1.bin"
 		even
 ObjPos_LZ3pf2:	incbin	"objpos\lz3pf2.bin"
 		even
-ObjPos_MZ1:	incbin	"objpos\mz1 (JP1).bin"
+ObjPos_MZ1:	incbin	"objpos\mz1.bin"
 		even
 ObjPos_MZ2:	incbin	"objpos\mz2.bin"
 		even
@@ -39012,9 +39004,9 @@ ObjPos_SYZ1:	incbin	"objpos\syz1.bin"
 		even
 ObjPos_SYZ2:	incbin	"objpos\syz2.bin"
 		even
-ObjPos_SYZ3:	incbin	"objpos\syz3 (JP1).bin"
+ObjPos_SYZ3:	incbin	"objpos\syz3.bin"
 		even
-ObjPos_SBZ1:	incbin	"objpos\sbz1 (JP1).bin"
+ObjPos_SBZ1:	incbin	"objpos\sbz1.bin"
 		even
 ObjPos_SBZ2:	incbin	"objpos\sbz2.bin"
 		even
