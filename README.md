@@ -4,3 +4,32 @@ This is a fork of the [Sonic 1 GitHub disassembly targeting _asm68k_](https://gi
 Furthermore, this project attempts to recreate some conveniences of the old Hivebrain 2005 disassembly — namely, undoing the extraction of every single object into its own file in the _\_incObj_ folder. Call me stubborn and old-fashioned, but I'd rather have everything right there in _sonic1.asm_ instead.
 
 You may now go ahead and call me a heretic. I don't care.
+
+## Differences
+
+### Files
+* Completely merged _incObj folder with sonic1.asm
+* Completely merged _inc folder with sonic1.asm (this is technically diverting from the Hivebrain 2005 style, but I never understood the arbitrary extraction of those files anyway)
+* Removed various junk files, including project files for community tools (if you really need them, just download them yourself ffs)
+* Collapsed all revision conditionals to always use JP rev01
+* Re-extracted title card mappings (out of all the things to re-include, why the hell would you do it for the title cards???)
+* Removed most unused files
+* Moved _tilemaps_ folder stuff into _misc_ folder
+* Renamed some includes to start with _
+* Moved sound driver to _sound_ folder
+* Renamed sonic.asm to sonic1.asm
+
+### Code Style
+* Collapsed multi-empty lines to a single one each
+* Removed all trailing whitespace before a line end
+* Removed _S U B R O U T I N E_ garbage
+* Replaced all tabs in comments with single spaces
+* Some comment cleanup around objects
+
+### Other
+* Enabled a whole bunch of compiler optimizations
+* Removed checksum check and fixheadr.exe
+* Removed padder
+
+## Warning
+This project is *NOT* anywhere close to being bit-accurate and has zero intentions of being so. The main goal of this project is to provide a nicer out-of-the-box experience without being bombarded with a whole bunch of stuff 99% of people won't ever touch. If you care about bit accuracy, the GitHub community disassembly is right there.
