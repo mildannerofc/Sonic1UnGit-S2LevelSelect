@@ -1034,19 +1034,10 @@ PlaySound_Special:
 
 ; ===========================================================================
 ; ---------------------------------------------------------------------------
-; Unused sound/music subroutine
-; ---------------------------------------------------------------------------
-
-PlaySound_Unused:
-		move.b	d0,(v_snddriver_ram+v_soundqueue2).w
-		rts
-
-; ---------------------------------------------------------------------------
 ; Subroutine to pause the game
 ; ---------------------------------------------------------------------------
 
 PauseGame:
-		nop
 		tst.b	(v_lives).w	; do you have any lives left?
 		beq.s	Unpause		; if not, branch
 		tst.w	(f_pause).w	; is game already paused?
@@ -2156,7 +2147,6 @@ Pal_LZCyc1:	incbin	"palette\Cycle - LZ Waterfall.bin"
 Pal_LZCyc2:	incbin	"palette\Cycle - LZ Conveyor Belt.bin"
 Pal_LZCyc3:	incbin	"palette\Cycle - LZ Conveyor Belt Underwater.bin"
 Pal_SBZ3Cyc:	incbin	"palette\Cycle - SBZ3 Waterfall.bin"
-Pal_MZCyc:	incbin	"palette\Cycle - MZ (Unused).bin"
 Pal_SLZCyc:	incbin	"palette\Cycle - SLZ.bin"
 Pal_SYZCyc1:	incbin	"palette\Cycle - SYZ1.bin"
 Pal_SYZCyc2:	incbin	"palette\Cycle - SYZ2.bin"
@@ -2860,48 +2850,6 @@ CalcSine:
 Sine_Data:	incbin	"misc\sinewave.bin"	; values for a 360° sine wave
 
 ; ===========================================================================
-
-; ---------------------------------------------------------------------------
-; Subroutine calculate a square root
-; (unused and usually only available in REV00, preserved just in case)
-
-; input:
-; d0 = number
-
-; output:
-; d0 = square root of number
-; ---------------------------------------------------------------------------
-
-CalcSqrt:
-		movem.l	d1-d2,-(sp)
-		move.w	d0,d1
-		swap	d1
-		moveq	#0,d0
-		move.w	d0,d1
-		moveq	#7,d2
-
-	loc_2C80:
-		rol.l	#2,d1
-		add.w	d0,d0
-		addq.w	#1,d0
-		sub.w	d0,d1
-		bcc.s	loc_2C9A
-		add.w	d0,d1
-		subq.w	#1,d0
-		dbf	d2,loc_2C80
-		lsr.w	#1,d0
-		movem.l	(sp)+,d1-d2
-		rts
-; ===========================================================================
-
-	loc_2C9A:
-		addq.w	#1,d0
-		dbf	d2,loc_2C80
-		lsr.w	#1,d0
-		movem.l	(sp)+,d1-d2
-		rts
-; End of function CalcSqrt
-
 ; ---------------------------------------------------------------------------
 ; Subroutine calculate an angle
 
@@ -4456,28 +4404,6 @@ Slide_Chunks_End
 MoveSonicInDemo:
 		tst.w	(f_demo).w	; is demo mode on?
 		bne.s	MDemo_On	; if yes, branch
-		rts
-; ===========================================================================
-
-; This is an unused subroutine for recording a demo
-
-DemoRecorder:
-		lea	($80000).l,a1
-		move.w	(v_btnpushtime1).w,d0
-		adda.w	d0,a1
-		move.b	(v_jpadhold1).w,d0
-		cmp.b	(a1),d0
-		bne.s	@next
-		addq.b	#1,1(a1)
-		cmpi.b	#$FF,1(a1)
-		beq.s	@next
-		rts
-
-	@next:
-		move.b	d0,2(a1)
-		move.b	#0,3(a1)
-		addq.w	#2,(v_btnpushtime1).w
-		andi.w	#$3FF,(v_btnpushtime1).w
 		rts
 ; ===========================================================================
 
@@ -10400,7 +10326,6 @@ Plat_ChkDel:
 Plat_Delete:	; Routine 6
 		bra.w	DeleteObject
 
-Map_Plat_Unused:include	"_maps\Platforms (unused).asm"
 Map_Plat_GHZ:	include	"_maps\Platforms (GHZ).asm"
 Map_Plat_SYZ:	include	"_maps\Platforms (SYZ).asm"
 Map_Plat_SLZ:	include	"_maps\Platforms (SLZ).asm"
@@ -20345,12 +20270,6 @@ Bas_Action:	; Routine 2
 		cmp.w	d2,d0
 		rts
 ; ===========================================================================
-; unused crap
-		bsr.w	SpeedToPos
-		bsr.w	DisplaySprite
-		tst.b	obRender(a0)
-		bpl.w	DeleteObject
-		rts
 
 		include	"_anim\Basaran.asm"
 Map_Bas:	include	"_maps\Basaran.asm"
@@ -24529,25 +24448,6 @@ locret_132D2:
 		rts
 ; End of function Sonic_JumpDirection
 
-; ===========================================================================
-; ---------------------------------------------------------------------------
-; Unused subroutine to squash Sonic
-; ---------------------------------------------------------------------------
-		move.b	obAngle(a0),d0
-		addi.b	#$20,d0
-		andi.b	#$C0,d0
-		bne.s	locret_13302
-		bsr.w	Sonic_DontRunOnWalls
-		tst.w	d1
-		bpl.s	locret_13302
-		move.w	#0,obInertia(a0) ; stop Sonic moving
-		move.w	#0,obVelX(a0)
-		move.w	#0,obVelY(a0)
-		move.b	#id_Warp3,obAnim(a0) ; use "warping" animation
-
-locret_13302:
-		rts
-
 ; ---------------------------------------------------------------------------
 ; Subroutine to prevent	Sonic leaving the boundaries of	a level
 ; ---------------------------------------------------------------------------
@@ -26032,6 +25932,9 @@ Van_LoadSonic:	; Routine 4
 	@wait:
 		rts
 
+		include	"_anim\Special Stage Entry (Unused).asm"
+Map_Vanish:	include	"_maps\Special Stage Entry (Unused).asm"
+
 ; ===========================================================================
 ; ---------------------------------------------------------------------------
 ; Object 08 - water splash (LZ)
@@ -26070,8 +25973,7 @@ Spla_Delete:	; Routine 4
 
 		include	"_anim\Shield and Invincibility.asm"
 Map_Shield:	include	"_maps\Shield and Invincibility.asm"
-		include	"_anim\Special Stage Entry (Unused).asm"
-Map_Vanish:	include	"_maps\Special Stage Entry (Unused).asm"
+
 		include	"_anim\Water Splash.asm"
 Map_Splash:	include	"_maps\Water Splash.asm"
 
@@ -35672,7 +35574,6 @@ Obj09_OnWall:
 ; ===========================================================================
 
 Obj09_InAir:
-		bsr.w	nullsub_2
 		bsr.w	Obj09_Move
 		bsr.w	Obj09_Fall
 
@@ -35824,24 +35725,6 @@ Obj09_NoJump:
 		rts
 ; End of function Obj09_Jump
 
-nullsub_2:
-		rts
-; End of function nullsub_2
-
-; ===========================================================================
-; ---------------------------------------------------------------------------
-; unused subroutine to limit Sonic's upward vertical speed
-; ---------------------------------------------------------------------------
-		move.w	#-$400,d1
-		cmp.w	obVelY(a0),d1
-		ble.s	locret_1BBB4
-		move.b	(v_jpadhold2).w,d0
-		andi.b	#btnABC,d0
-		bne.s	locret_1BBB4
-		move.w	d1,obVelY(a0)
-
-locret_1BBB4:
-		rts
 ; ---------------------------------------------------------------------------
 ; Subroutine to fix the	camera on Sonic's position (special stage)
 ; ---------------------------------------------------------------------------
