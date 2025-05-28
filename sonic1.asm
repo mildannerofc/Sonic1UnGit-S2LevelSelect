@@ -7,9 +7,9 @@
 
 ; ===========================================================================
 
-	include	"Constants.asm"
-	include	"Variables.asm"
-	include	"Macros.asm"
+	include	"_Constants.asm"
+	include	"_Variables.asm"
+	include	"_Macros.asm"
 
 EnableSRAM:	equ 0	; change to 1 to enable SRAM
 BackupSRAM:	equ 1
@@ -295,18 +295,18 @@ GameProgram:
 		beq.w	GameInit	; if yes, branch
 
 CheckSumCheck:
-		movea.l	#EndOfHeader,a0	; start	checking bytes after the header	($200)
-		movea.l	#RomEndLoc,a1	; stop at end of ROM
-		move.l	(a1),d0
-		moveq	#0,d1
-
-	@loop:
-		add.w	(a0)+,d1
-		cmp.l	a0,d0
-		bhs.s	@loop
-		movea.l	#Checksum,a1	; read the checksum
-		cmp.w	(a1),d1		; compare checksum in header to ROM
-		bne.w	CheckSumError	; if they don't match, branch
+;		movea.l	#EndOfHeader,a0	; start	checking bytes after the header	($200)
+;		movea.l	#RomEndLoc,a1	; stop at end of ROM
+;		move.l	(a1),d0
+;		moveq	#0,d1
+;
+;	@loop:
+;		add.w	(a0)+,d1
+;		cmp.l	a0,d0
+;		bhs.s	@loop
+;		movea.l	#Checksum,a1	; read the checksum
+;		cmp.w	(a1),d1		; compare checksum in header to ROM
+;		bne.w	CheckSumError	; if they don't match, branch
 
 	CheckSumOk:
 		lea	($FFFFFE00).w,a6
@@ -9316,7 +9316,7 @@ ObjPos_Null:	dc.b $FF, $FF, 0, 0, 0,	0
 		endc
 		;dcb.b ($10000-(*%$10000))-(EndOfRom-SoundDriver),$FF
 
-SoundDriver:	include "s1.sounddriver.asm"
+SoundDriver:	include "sound\s1.sounddriver.asm"
 
 ; end of 'ROM'
 		even

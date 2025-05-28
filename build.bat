@@ -1,5 +1,6 @@
 @echo off
 
-IF EXIST s1built.bin move /Y s1built.bin s1built.prev.bin >NUL
-asm68k /k /p /o ae-,c+ sonic.asm, s1built.bin >errors.txt, , sonic.lst
-fixheadr.exe s1built.bin
+asm68k /k /m /o ws+,op+,os+,ow+,oz+,oaq+,osq+,omq+,ae-,v+ /p sonic1.asm, s1built.bin
+
+pause
+start s1built.bin
