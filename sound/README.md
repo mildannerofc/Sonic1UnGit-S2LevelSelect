@@ -16,4 +16,4 @@ At the top of your music file; use `dSAMPLE=$XX`
 
 * It's easier to replace a song; but you can add new songs, you just need to define them in `_Constants.asm`
 
-* $94 - $9F are clear (inclusive)
+* $94 - $9F (inclusive) are clear
