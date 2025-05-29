@@ -239,22 +239,20 @@ DACUpdateTrack:
 		jsr	SetDuration(pc)
 ; loc_71C88:
 @gotsampleduration:
-                move.l  a4,TrackDataPointer(a5)           ; Save pointer
-                btst    #2,TrackPlaybackControl(a5)       ; Is track being overridden?
-                bne.s   @locret                                 ; Return if yes
-                moveq   #0,d0
-                move.b  TrackSavedDAC(a5),d0      ; Get sample
-                cmpi.b  #$80,d0                         ; Is it a rest?
-                beq.s   @locret                         ; Return if yes
-                ;btst    #3,d0                          ; -- REMOVE THIS LINE
-                ;bne.s   .timpani                       ; -- REMOVE THIS LINE
-                ;move.b  d0,(z80_dac_sample).l          ; -- REMOVE THIS LINE
-                MPCM_stopZ80                                    ; ++
-                move.b  d0, MPCM_Z80_RAM+Z_MPCM_CommandInput    ; ++ send DAC sample to Mega PCM
-                MPCM_startZ80                                   ; ++
+		move.l  a4,TrackDataPointer(a5) ; Save pointer
+		btst    #2,TrackPlaybackControl(a5) ; Is track being overridden?
+		bne.s   @locret ; Return if yes
+		moveq   #0,d0
+		move.b  TrackSavedDAC(a5),d0 ; Get sample
+		cmpi.b  #$80,d0 ; Is it a rest?
+		beq.s   @locret ; Return if yes
+
+		MPCM_stopZ80 
+		move.b  d0, MPCM_Z80_RAM+Z_MPCM_CommandInput ; ++ send DAC sample to Mega PCM
+		MPCM_startZ80 ; ++
 ; locret_71CAA:
 @locret:
-                rts
+		rts
 ; End of function DACUpdateTrack
 
 ; ===========================================================================

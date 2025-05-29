@@ -300,7 +300,7 @@ GameInit:
 		move.w	#$3F7F,d6
 	@clearRAM:
 		move.l	d7,(a6)+
-		dbf	d6,@clearRAM	; clear RAM ($0000-$FDFF)
+		dbf	d6,@clearRAM ; clear RAM ($0000-$FDFF)
 
 		bsr.w	VDPSetupGame
 		bsr.w	JoypadInit
@@ -308,15 +308,9 @@ GameInit:
 		jsr     MegaPCM_LoadDriver
         lea     SampleTable, a0
         jsr     MegaPCM_LoadSampleTable
-		tst.w   d0                      ; was sample table loaded successfully?
-		beq.s   @SampleTableOk          ; if yes, branch
+		tst.w   d0 ; was sample table loaded successfully?
+		beq.s   @SampleTableOk ; if yes, branch
 		illegal
-;                 ifdef __DEBUG__
-;                     ; for MD Debugger v.2.5 or above
-;                     RaiseError "MegaPCM_LoadSampleTable returned %<.b d0>", MPCM_Debugger_LoadSampleTableException
-;                 else
-;                     illegal
-;                 endif
 @SampleTableOk:
 
 MainGameLoop:
