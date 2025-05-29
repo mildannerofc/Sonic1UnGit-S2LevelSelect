@@ -7,5 +7,71 @@ errors.txt
 s1built.bin
 s1built.prev.bin
 .idea
-music/cmp/*.bin
-sfx/cmp/*.bin
+sound/music/cmp/Mus81 - GHZ.bin
+sound/music/cmp/Mus82 - LZ.bin
+sound/music/cmp/Mus83 - MZ.bin
+sound/music/cmp/Mus84 - SLZ.bin
+sound/music/cmp/Mus85 - SYZ.bin
+sound/music/cmp/Mus86 - SBZ.bin
+sound/music/cmp/Mus87 - Invincibility.bin
+sound/music/cmp/Mus88 - Extra Life.bin
+sound/music/cmp/Mus89 - Special Stage.bin
+sound/music/cmp/Mus8A - Title Screen.bin
+sound/music/cmp/Mus8B - Ending.bin
+sound/music/cmp/Mus8C - Boss.bin
+sound/music/cmp/Mus8D - FZ.bin
+sound/music/cmp/Mus8E - Sonic Got Through.bin
+sound/music/cmp/Mus8F - Game Over.bin
+sound/music/cmp/Mus90 - Continue Screen.bin
+sound/music/cmp/Mus91 - Credits.bin
+sound/music/cmp/Mus92 - Drowning.bin
+sound/music/cmp/Mus93 - Get Emerald.bin
+sound/sfx/cmp/SndA0 - Jump.bin
+sound/sfx/cmp/SndA1 - Lamppost.bin
+sound/sfx/cmp/SndA2.bin
+sound/sfx/cmp/SndA3 - Death.bin
+sound/sfx/cmp/SndA4 - Skid.bin
+sound/sfx/cmp/SndA5.bin
+sound/sfx/cmp/SndA6 - Hit Spikes.bin
+sound/sfx/cmp/SndA7 - Push Block.bin
+sound/sfx/cmp/SndA8 - SS Goal.bin
+sound/sfx/cmp/SndA9 - SS Item.bin
+sound/sfx/cmp/SndAA - Splash.bin
+sound/sfx/cmp/SndAB.bin
+sound/sfx/cmp/SndAC - Hit Boss.bin
+sound/sfx/cmp/SndAD - Get Bubble.bin
+sound/sfx/cmp/SndAE - Fireball.bin
+sound/sfx/cmp/SndAF - Shield.bin
+sound/sfx/cmp/SndB0 - Saw.bin
+sound/sfx/cmp/SndB1 - Electric.bin
+sound/sfx/cmp/SndB2 - Drown Death.bin
+sound/sfx/cmp/SndB3 - Flamethrower.bin
+sound/sfx/cmp/SndB4 - Bumper.bin
+sound/sfx/cmp/SndB5 - Ring.bin
+sound/sfx/cmp/SndB6 - Spikes Move.bin
+sound/sfx/cmp/SndB7 - Rumbling.bin
+sound/sfx/cmp/SndB8.bin
+sound/sfx/cmp/SndB9 - Collapse.bin
+sound/sfx/cmp/SndBA - SS Glass.bin
+sound/sfx/cmp/SndBB - Door.bin
+sound/sfx/cmp/SndBC - Teleport.bin
+sound/sfx/cmp/SndBD - ChainStomp.bin
+sound/sfx/cmp/SndBE - Roll.bin
+sound/sfx/cmp/SndBF - Get Continue.bin
+sound/sfx/cmp/SndC0 - Basaran Flap.bin
+sound/sfx/cmp/SndC1 - Break Item.bin
+sound/sfx/cmp/SndC2 - Drown Warning.bin
+sound/sfx/cmp/SndC3 - Giant Ring.bin
+sound/sfx/cmp/SndC4 - Bomb.bin
+sound/sfx/cmp/SndC5 - Cash Register.bin
+sound/sfx/cmp/SndC6 - Ring Loss.bin
+sound/sfx/cmp/SndC7 - Chain Rising.bin
+sound/sfx/cmp/SndC8 - Burning.bin
+sound/sfx/cmp/SndC9 - Hidden Bonus.bin
+sound/sfx/cmp/SndCA - Enter SS.bin
+sound/sfx/cmp/SndCB - Wall Smash.bin
+sound/sfx/cmp/SndCC - Spring.bin
+sound/sfx/cmp/SndCD - Switch.bin
+sound/sfx/cmp/SndCE - Ring Left Speaker.bin
+sound/sfx/cmp/SndCF - Signpost.bin
+sound/sfx/cmp/SndD0 - Waterfall.bin
