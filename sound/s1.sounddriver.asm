@@ -2469,43 +2469,43 @@ cfOpF9:
 ; ---------------------------------------------------------------------------
 ; Music data
 ; ---------------------------------------------------------------------------
-Music81:	incbin	"sound/music/Mus81 - GHZ.bin"
+Music81:	incbin	"sound/cmp_music/Mus81 - GHZ.bin"
 		even
-Music82:	incbin	"sound/music/Mus82 - LZ.bin"
+Music82:	incbin	"sound/cmp_music/Mus82 - LZ.bin"
 		even
-Music83:	incbin	"sound/music/Mus83 - MZ.bin"
+Music83:	incbin	"sound/cmp_music/Mus83 - MZ.bin"
 		even
-Music84:	incbin	"sound/music/Mus84 - SLZ.bin"
+Music84:	incbin	"sound/cmp_music/Mus84 - SLZ.bin"
 		even
-Music85:	incbin	"sound/music/Mus85 - SYZ.bin"
+Music85:	incbin	"sound/cmp_music/Mus85 - SYZ.bin"
 		even
-Music86:	incbin	"sound/music/Mus86 - SBZ.bin"
+Music86:	incbin	"sound/cmp_music/Mus86 - SBZ.bin"
 		even
-Music87:	incbin	"sound/music/Mus87 - Invincibility.bin"
+Music87:	incbin	"sound/cmp_music/Mus87 - Invincibility.bin"
 		even
-Music88:	incbin	"sound/music/Mus88 - Extra Life.bin"
+Music88:	incbin	"sound/cmp_music/Mus88 - Extra Life.bin"
 		even
-Music89:	incbin	"sound/music/Mus89 - Special Stage.bin"
+Music89:	incbin	"sound/cmp_music/Mus89 - Special Stage.bin"
 		even
-Music8A:	incbin	"sound/music/Mus8A - Title Screen.bin"
+Music8A:	incbin	"sound/cmp_music/Mus8A - Title Screen.bin"
 		even
-Music8B:	incbin	"sound/music/Mus8B - Ending.bin"
+Music8B:	incbin	"sound/cmp_music/Mus8B - Ending.bin"
 		even
-Music8C:	incbin	"sound/music/Mus8C - Boss.bin"
+Music8C:	incbin	"sound/cmp_music/Mus8C - Boss.bin"
 		even
-Music8D:	incbin	"sound/music/Mus8D - FZ.bin"
+Music8D:	incbin	"sound/cmp_music/Mus8D - FZ.bin"
 		even
-Music8E:	incbin	"sound/music/Mus8E - Sonic Got Through.bin"
+Music8E:	incbin	"sound/cmp_music/Mus8E - Sonic Got Through.bin"
 		even
-Music8F:	incbin	"sound/music/Mus8F - Game Over.bin"
+Music8F:	incbin	"sound/cmp_music/Mus8F - Game Over.bin"
 		even
-Music90:	incbin	"sound/music/Mus90 - Continue Screen.bin"
+Music90:	incbin	"sound/cmp_music/Mus90 - Continue Screen.bin"
 		even
-Music91:	incbin	"sound/music/Mus91 - Credits.bin"
+Music91:	incbin	"sound/cmp_music/Mus91 - Credits.bin"
 		even
-Music92:	incbin	"sound/music/Mus92 - Drowning.bin"
+Music92:	incbin	"sound/cmp_music/Mus92 - Drowning.bin"
 		even
-Music93:	incbin	"sound/music/Mus93 - Get Emerald.bin"
+Music93:	incbin	"sound/cmp_music/Mus93 - Get Emerald.bin"
 		even
 
 ; ---------------------------------------------------------------------------
@@ -2572,125 +2572,105 @@ ptr_specend
 ; ---------------------------------------------------------------------------
 ; Sound effect data
 ; ---------------------------------------------------------------------------
-SoundA0:	incbin	"sound/sfx/SndA0 - Jump.bin"
+SoundA0:	incbin	"sound/cmp_sfx/SndA0 - Jump.bin"
 		even
-SoundA1:	incbin	"sound/sfx/SndA1 - Lamppost.bin"
+SoundA1:	incbin	"sound/cmp_sfx/SndA1 - Lamppost.bin"
 		even
-SoundA2:	incbin	"sound/sfx/SndA2.bin"
+SoundA2:	incbin	"sound/cmp_sfx/SndA2.bin"
 		even
-SoundA3:	incbin	"sound/sfx/SndA3 - Death.bin"
+SoundA3:	incbin	"sound/cmp_sfx/SndA3 - Death.bin"
 		even
-SoundA4:	incbin	"sound/sfx/SndA4 - Skid.bin"
+SoundA4:	incbin	"sound/cmp_sfx/SndA4 - Skid.bin"
 		even
-SoundA5:	incbin	"sound/sfx/SndA5.bin"
+SoundA5:	incbin	"sound/cmp_sfx/SndA5.bin"
 		even
-SoundA6:	incbin	"sound/sfx/SndA6 - Hit Spikes.bin"
+SoundA6:	incbin	"sound/cmp_sfx/SndA6 - Hit Spikes.bin"
 		even
-SoundA7:	incbin	"sound/sfx/SndA7 - Push Block.bin"
+SoundA7:	incbin	"sound/cmp_sfx/SndA7 - Push Block.bin"
 		even
-SoundA8:	incbin	"sound/sfx/SndA8 - SS Goal.bin"
+SoundA8:	incbin	"sound/cmp_sfx/SndA8 - SS Goal.bin"
 		even
-SoundA9:	incbin	"sound/sfx/SndA9 - SS Item.bin"
+SoundA9:	incbin	"sound/cmp_sfx/SndA9 - SS Item.bin"
 		even
-SoundAA:	incbin	"sound/sfx/SndAA - Splash.bin"
+SoundAA:	incbin	"sound/cmp_sfx/SndAA - Splash.bin"
 		even
-SoundAB:	incbin	"sound/sfx/SndAB.bin"
+SoundAB:	incbin	"sound/cmp_sfx/SndAB.bin"
 		even
-SoundAC:	incbin	"sound/sfx/SndAC - Hit Boss.bin"
+SoundAC:	incbin	"sound/cmp_sfx/SndAC - Hit Boss.bin"
 		even
-SoundAD:	incbin	"sound/sfx/SndAD - Get Bubble.bin"
+SoundAD:	incbin	"sound/cmp_sfx/SndAD - Get Bubble.bin"
 		even
-SoundAE:	incbin	"sound/sfx/SndAE - Fireball.bin"
+SoundAE:	incbin	"sound/cmp_sfx/SndAE - Fireball.bin"
 		even
-SoundAF:	incbin	"sound/sfx/SndAF - Shield.bin"
+SoundAF:	incbin	"sound/cmp_sfx/SndAF - Shield.bin"
 		even
-SoundB0:	incbin	"sound/sfx/SndB0 - Saw.bin"
+SoundB0:	incbin	"sound/cmp_sfx/SndB0 - Saw.bin"
 		even
-SoundB1:	incbin	"sound/sfx/SndB1 - Electric.bin"
+SoundB1:	incbin	"sound/cmp_sfx/SndB1 - Electric.bin"
 		even
-SoundB2:	incbin	"sound/sfx/SndB2 - Drown Death.bin"
+SoundB2:	incbin	"sound/cmp_sfx/SndB2 - Drown Death.bin"
 		even
-SoundB3:	incbin	"sound/sfx/SndB3 - Flamethrower.bin"
+SoundB3:	incbin	"sound/cmp_sfx/SndB3 - Flamethrower.bin"
 		even
-SoundB4:	incbin	"sound/sfx/SndB4 - Bumper.bin"
+SoundB4:	incbin	"sound/cmp_sfx/SndB4 - Bumper.bin"
 		even
-SoundB5:	incbin	"sound/sfx/SndB5 - Ring.bin"
+SoundB5:	incbin	"sound/cmp_sfx/SndB5 - Ring.bin"
 		even
-SoundB6:	incbin	"sound/sfx/SndB6 - Spikes Move.bin"
+SoundB6:	incbin	"sound/cmp_sfx/SndB6 - Spikes Move.bin"
 		even
-SoundB7:	incbin	"sound/sfx/SndB7 - Rumbling.bin"
+SoundB7:	incbin	"sound/cmp_sfx/SndB7 - Rumbling.bin"
 		even
-SoundB8:	incbin	"sound/sfx/SndB8.bin"
+SoundB8:	incbin	"sound/cmp_sfx/SndB8.bin"
 		even
-SoundB9:	incbin	"sound/sfx/SndB9 - Collapse.bin"
+SoundB9:	incbin	"sound/cmp_sfx/SndB9 - Collapse.bin"
 		even
-SoundBA:	incbin	"sound/sfx/SndBA - SS Glass.bin"
+SoundBA:	incbin	"sound/cmp_sfx/SndBA - SS Glass.bin"
 		even
-SoundBB:	incbin	"sound/sfx/SndBB - Door.bin"
+SoundBB:	incbin	"sound/cmp_sfx/SndBB - Door.bin"
 		even
-SoundBC:	incbin	"sound/sfx/SndBC - Teleport.bin"
+SoundBC:	incbin	"sound/cmp_sfx/SndBC - Teleport.bin"
 		even
-SoundBD:	incbin	"sound/sfx/SndBD - ChainStomp.bin"
+SoundBD:	incbin	"sound/cmp_sfx/SndBD - ChainStomp.bin"
 		even
-SoundBE:	incbin	"sound/sfx/SndBE - Roll.bin"
+SoundBE:	incbin	"sound/cmp_sfx/SndBE - Roll.bin"
 		even
-SoundBF:	incbin	"sound/sfx/SndBF - Get Continue.bin"
+SoundBF:	incbin	"sound/cmp_sfx/SndBF - Get Continue.bin"
 		even
-SoundC0:	incbin	"sound/sfx/SndC0 - Basaran Flap.bin"
+SoundC0:	incbin	"sound/cmp_sfx/SndC0 - Basaran Flap.bin"
 		even
-SoundC1:	incbin	"sound/sfx/SndC1 - Break Item.bin"
+SoundC1:	incbin	"sound/cmp_sfx/SndC1 - Break Item.bin"
 		even
-SoundC2:	incbin	"sound/sfx/SndC2 - Drown Warning.bin"
+SoundC2:	incbin	"sound/cmp_sfx/SndC2 - Drown Warning.bin"
 		even
-SoundC3:	incbin	"sound/sfx/SndC3 - Giant Ring.bin"
+SoundC3:	incbin	"sound/cmp_sfx/SndC3 - Giant Ring.bin"
 		even
-SoundC4:	incbin	"sound/sfx/SndC4 - Bomb.bin"
+SoundC4:	incbin	"sound/cmp_sfx/SndC4 - Bomb.bin"
 		even
-SoundC5:	incbin	"sound/sfx/SndC5 - Cash Register.bin"
+SoundC5:	incbin	"sound/cmp_sfx/SndC5 - Cash Register.bin"
 		even
-SoundC6:	incbin	"sound/sfx/SndC6 - Ring Loss.bin"
+SoundC6:	incbin	"sound/cmp_sfx/SndC6 - Ring Loss.bin"
 		even
-SoundC7:	incbin	"sound/sfx/SndC7 - Chain Rising.bin"
+SoundC7:	incbin	"sound/cmp_sfx/SndC7 - Chain Rising.bin"
 		even
-SoundC8:	incbin	"sound/sfx/SndC8 - Burning.bin"
+SoundC8:	incbin	"sound/cmp_sfx/SndC8 - Burning.bin"
 		even
-SoundC9:	incbin	"sound/sfx/SndC9 - Hidden Bonus.bin"
+SoundC9:	incbin	"sound/cmp_sfx/SndC9 - Hidden Bonus.bin"
 		even
-SoundCA:	incbin	"sound/sfx/SndCA - Enter SS.bin"
+SoundCA:	incbin	"sound/cmp_sfx/SndCA - Enter SS.bin"
 		even
-SoundCB:	incbin	"sound/sfx/SndCB - Wall Smash.bin"
+SoundCB:	incbin	"sound/cmp_sfx/SndCB - Wall Smash.bin"
 		even
-SoundCC:	incbin	"sound/sfx/SndCC - Spring.bin"
+SoundCC:	incbin	"sound/cmp_sfx/SndCC - Spring.bin"
 		even
-SoundCD:	incbin	"sound/sfx/SndCD - Switch.bin"
+SoundCD:	incbin	"sound/cmp_sfx/SndCD - Switch.bin"
 		even
-SoundCE:	incbin	"sound/sfx/SndCE - Ring Left Speaker.bin"
+SoundCE:	incbin	"sound/cmp_sfx/SndCE - Ring Left Speaker.bin"
 		even
-SoundCF:	incbin	"sound/sfx/SndCF - Signpost.bin"
+SoundCF:	incbin	"sound/cmp_sfx/SndCF - Signpost.bin"
 		even
 
 ; ---------------------------------------------------------------------------
 ; Special sound effect data
 ; ---------------------------------------------------------------------------
-SoundD0:	incbin	"sound/sfx/SndD0 - Waterfall.bin"
+SoundD0:	incbin	"sound/cmp_sfx/SndD0 - Waterfall.bin"
 		even
-
-; ; ---------------------------------------------------------------------------
-; ; 'Sega' chant PCM sample
-; ; ---------------------------------------------------------------------------
-; 		; Don't let Sega sample cross $8000-byte boundary
-; 		; (DAC driver doesn't switch banks automatically)
-; 		if (*&$7FFF)+Size_of_SegaPCM>$8000
-; 			align $8000
-; 		endc
-; SegaPCM:	incbin	"sound/dac/sega.pcm"
-; SegaPCM_End
-; 		even
-;
-; 		if SegaPCM_End-SegaPCM>$8000
-; 			inform 3,"Sega sound must fit within $8000 bytes, but you have a $%h byte Sega sound.",SegaPCM_End-SegaPCM
-; 		endc
-; 		if SegaPCM_End-SegaPCM>Size_of_SegaPCM
-; 			inform 3,"Size_of_SegaPCM = $%h, but you have a $%h byte Sega sound.",Size_of_SegaPCM,SegaPCM_End-SegaPCM
-; 		endc
-
