@@ -7,3 +7,5 @@ errors.txt
 s1built.bin
 s1built.prev.bin
 .idea
+music/cmp/*.bin
+sfx/cmp/*.bin
