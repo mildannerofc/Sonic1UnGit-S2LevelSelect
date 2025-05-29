@@ -1,4 +1,4 @@
-# Defining Samples
+# Defining Samples in ASM Music
 
 At the top of your music file; use `dSAMPLE=$XX` 
 
@@ -6,7 +6,7 @@ At the top of your music file; use `dSAMPLE=$XX`
 
 * $8C is the Sega Chant
 
-Using ASM Music:
+# Using ASM Music:
 
 * To complie at build, add  `smps2asm2bin.exe "music/Music.asm" "cmp_music/Music.bin"` to compile_sounds.bat (renaming Music to the song of your choice)
 
