@@ -17,8 +17,8 @@ SampleTable:
 	dc.w	-1	; end marker
 
 ; ---------------------------------------------------------------
-	incdac	Kick, "sound/dac/kick.dpcm"
+	incdac	Kick, "sound/dac/kick.pcm"
 	incdac	Snare, "sound/dac/snare.pcm"
-	incdac	Timpani, "sound/dac/timpani.dpcm"
+	incdac	Timpani, "sound/dac/timpani.pcm"
 	incdac	SegaPCM, "sound/dac/sega.wav"
 	even
