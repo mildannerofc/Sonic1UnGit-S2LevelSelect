@@ -4,6 +4,8 @@ At the top of your music file; use `dSAMPLE=$XX`
 
 * By Default, $81 is dKick, $82 is dSnare, $83 is a Timpani, and $88-$8B are Timpani pitches
 
+* $84 - $8A (inclusive) are free
+
 * $8C is the Sega Chant
 
 # Using ASM Music:
