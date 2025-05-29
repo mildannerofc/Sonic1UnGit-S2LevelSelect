@@ -6,8 +6,7 @@ Furthermore, this project attempts to recreate some conveniences of the old Hive
 You may now go ahead and call me a heretic. I don't care.
 
 ## Differences
-* MegaPCM
-* ASM Music (normally not possible in ASM68K; compiled with everything else)
+
 ### Files
 * Completely merged _incObj folder with sonic1.asm
 * Completely merged _inc folder with sonic1.asm (this is technically diverting from the Hivebrain 2005 style, but I never understood the arbitrary extraction of those files anyway)
@@ -31,6 +30,8 @@ You may now go ahead and call me a heretic. I don't care.
 * Enabled a whole bunch of compiler optimizations
 * Removed checksum check and fixheadr.exe
 * Removed padder
+* MegaPCM
+* ASM Music (normally not possible in ASM68K; compiled with everything else)
 
 ## Warning
 This project is *NOT* anywhere close to being bit-accurate and has zero intentions of being so. The main goal of this project is to provide a nicer out-of-the-box experience without being bombarded with a whole bunch of stuff 99% of people won't ever touch. If you care about bit accuracy, the GitHub community disassembly is right there.
