@@ -13,5 +13,3 @@ At the top of your music file; use `dSAMPLE=$XX`
 * To get the game to read it, in s1.soundriver.asm; use `MusicXX:	incbin	"sound/cmp_music/Music.bin"` with an `even` on the line below
 
 * It's easier to replace a song; but you can add new songs, you just need to define them in `_Constants.asm`
-
-* Music must be compiled seperate
