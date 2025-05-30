@@ -1,6 +1,6 @@
 # Defining Samples in ASM Music
 
-At the top of your music file; use `dSAMPLE=$XX` or define it in `_smps2asm_inc.asm`
+At the top of your music file; use `dSAMPLE=$XX` or define it in `_smps2asm_inc.asm` in the DAC Sample Equates
 
 * By Default, $81 is dKick, $82 is dSnare, $83 is a Timpani, and $88-$8B are Timpani pitches
 
