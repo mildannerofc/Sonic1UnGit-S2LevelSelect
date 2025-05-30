@@ -8,6 +8,8 @@ At the top of your music file; use `dSAMPLE=$XX`
 
 * $8C is the Sega Chant
 
+* All samples are PCM by default instead of DPCM
+
 # Using ASM Music:
 
 * To get the game to read it, in s1.soundriver.asm; use `MusicXX:	incbin	"sound/music/cmp/Music.bin"` with an `even` on the line below (the filename for Music.bin should have the same name as Music.asm)
