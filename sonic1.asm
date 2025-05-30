@@ -10,7 +10,7 @@
 	include	"_Constants.asm"
 	include	"_Variables.asm"
 	include	"_Macros.asm"
-
+	include	"sound/_smps2asm_inc.asm"
 EnableSRAM:	equ 0	; change to 1 to enable SRAM
 BackupSRAM:	equ 1
 AddressSRAM:	equ 3	; 0 = odd+even; 2 = even only; 3 = odd only
