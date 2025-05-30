@@ -45,7 +45,7 @@ smpsPitch03lo		rs.b	$C
 smpsPitch02lo		rs.b	$C
 smpsPitch01lo		rs.b	$C
 	rsreset
-smpsPitch00		rs.b	$C
+smpsPitch00			rs.b	$C
 smpsPitch01hi		rs.b	$C
 smpsPitch02hi		rs.b	$C
 smpsPitch03hi		rs.b	$C
