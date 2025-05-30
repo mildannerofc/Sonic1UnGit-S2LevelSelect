@@ -8,7 +8,7 @@ At the top of your music file; use `dSAMPLE=$XX`
 
 * $8C is the Sega Chant
 
-* All samples are PCM by default instead of DPCM
+* All samples are Unisgned 8-bit PCM by default instead of DPCM, and can be edited in a program such as Audacity
 
 # Using ASM Music:
 
