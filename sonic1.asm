@@ -335,80 +335,84 @@ ptr_GM_Credits:	bra.w	GM_Credits	; Credits ($1C)
 
 		rts
 ; ===========================================================================
-BusError:
+; Sonic 1 Error Handler Code: Gets The Address, Insturction, and Stack pointer
+; and displays it so developers can debug their code.
+; v_errortype tells the handler what text to show
+; ===========================================================================
+BusError: ; Hardware Error, CPU cannot physically address this; shouldn't show up
 		move.b	#2,(v_errortype).w
-		bra.s	GetAddressValue
+		bra.s	GetAddressValue	;Error comes from an address
 
-AddressError:
+AddressError: ; Hardware Error, Address is odd, and not even; and the CPU cannot access it
 		move.b	#4,(v_errortype).w
-		bra.s	GetAddressValue
+		bra.s	GetAddressValue	;Error comes from an address
 
-IllegalInstr:
+IllegalInstr: ;Instruction is Unrecognized, these are functions that aren't guarenteed to exist (but the ROM still compiles with them)
 		move.b	#6,(v_errortype).w
-		addq.l	#2,2(sp)
-		bra.s	GetInsturctionValue
+		addq.l	#2,2(sp) ;Help us get to the instruction by adding to the stack pointer
+		bra.s	GetInsturctionValue ;Error comes from an instruction
 
-ZeroDivide:
+ZeroDivide: ; Pretty simple, we've managed to divide by 0 somehow, which doesn't result in anything except this error
 		move.b	#8,(v_errortype).w
-		bra.s	GetInsturctionValue
+		bra.s	GetInsturctionValue ;Error comes from an instruction
 
-ChkInstr:
+ChkInstr: ; Out of bounds insturction resulted from a check
 		move.b	#$A,(v_errortype).w
-		bra.s	GetInsturctionValue
+		bra.s	GetInsturctionValue ;Error comes from an instruction
 
-TrapvInstr:
+TrapvInstr: ; Insturction is overflowing
 		move.b	#$C,(v_errortype).w
-		bra.s	GetInsturctionValue
+		bra.s	GetInsturctionValue ;Error comes from an instruction
 
-PrivilegeViol:
+PrivilegeViol: ;We are using a insturction that we aren't allowed to use (kind of like using sudo without beign a sudoer)
 		move.b	#$E,(v_errortype).w
-		bra.s	GetInsturctionValue
+		bra.s	GetInsturctionValue ;Error comes from an instruction
 
-Trace:
+Trace: ;We're in trace mode, this shouldn't ever show up
 		move.b	#$10,(v_errortype).w
-		bra.s	GetInsturctionValue
+		bra.s	GetInsturctionValue ;Error comes from an instruction
 
-Line1010Emu:
+Line1010Emu: ;Unimplemented Instruction, usually for floating point errors
 		move.b	#$12,(v_errortype).w
-		addq.l	#2,2(sp)
-		bra.s	GetInsturctionValue
+		addq.l	#2,2(sp) ;Help us get to the instruction by adding to the stack pointer
+		bra.s	GetInsturctionValue ;Error comes from an instruction
 
-Line1111Emu:
+Line1111Emu: ;Unimplemented Instruction, more floating point stuff
 		move.b	#$14,(v_errortype).w
-		addq.l	#2,2(sp)
-		bra.s	GetInsturctionValue
+		addq.l	#2,2(sp) ;Help us get to the instruction by adding to the stack pointer
+		bra.s	GetInsturctionValue ;Error comes from an instruction
 
-ErrorExcept:
+ErrorExcept: ;Exception, this prevents a real error from happening, and returns an exception; kind of like try and except in python
 		move.b	#0,(v_errortype).w
-		bra.s	GetInsturctionValue
+		bra.s	GetInsturctionValue ;Error comes from an instruction
 ; ===========================================================================
 ;loc_43A:
 GetAddressValue:
-		disable_ints
-		addq.w	#2,sp
-		move.l	(sp)+,(v_spbuffer).w
-		addq.w	#2,sp
-		movem.l	d0-a7,(v_regbuffer).w
-		bsr.w	ShowErrorMessage
-		move.l	2(sp),d0
-		bsr.w	ShowErrorValue
-		move.l	(v_spbuffer).w,d0
-		bsr.w	ShowErrorValue
-		bra.s	TryErrorAdvance
+		disable_ints ;disable interrupts
+		addq.w	#2,sp ;add 2 to the stack pointer to get us the buffer values
+		move.l	(sp)+,(v_spbuffer).w ; Save the stack pointer (addresses; hence why it isn;t in GetInsturctionValue)
+		addq.w	#2,sp ; add 2 to the stack pointer to get us the register values
+		movem.l	d0-a7,(v_regbuffer).w ;store the registers as they were when the crash happened
+		bsr.w	ShowErrorMessage ; show what type of error we have
+		move.l	2(sp),d0 ;move the stack pointer information we've collected to d0
+		bsr.w	ShowErrorValue ;show the address
+		move.l	(v_spbuffer).w,d0 ; store the stack pointer buffer to d0 so we can show it
+		bsr.w	ShowErrorValue ;show the stack pointer information that will help us debug the error
+		bra.s	TryErrorAdvance ; Attempt to get past the error when C is pressed
 ; ===========================================================================
 ;loc_462:
 GetInsturctionValue:
-		disable_ints
-		movem.l	d0-a7,(v_regbuffer).w
+		disable_ints ;disable interrupts
+		movem.l	d0-a7,(v_regbuffer).w ; store the current instruction that caused the crash
 		bsr.w	ShowErrorMessage
-		move.l	2(sp),d0
-		bsr.w	ShowErrorValue
+		move.l	2(sp),d0 ;move the stack popinter information we've collected to d0
+		bsr.w	ShowErrorValue	;show us the insturction  in hex format
 ;loc_478:
 TryErrorAdvance:
-		bsr.w	ErrorWaitForC
-		movem.l	(v_regbuffer).w,d0-a7
-		enable_ints
-		rte
+		bsr.w	ErrorWaitForC	;Wait for the player to push C to do anything
+		movem.l	(v_regbuffer).w,d0-a7 ;restore the RAM to the game and attempt to bypass the error
+		enable_ints	;reenable intterupts to continue playing
+		rte	;Return to exception (continue the game code)
 
 
 ShowErrorMessage:
@@ -489,7 +493,7 @@ ErrorWaitForC:
 
 ; ===========================================================================
 
-Art_Text:	incbin	"artunc\menutext.bin" ; text used in level select and debug mode
+Art_Text:	incbin	"artunc\menutext.bin" ; text used in level select, the error handler, and debug mode
 		even
 
 ; ===========================================================================
