@@ -335,69 +335,55 @@ ptr_GM_Credits:	bra.w	GM_Credits	; Credits ($1C)
 
 		rts
 ; ===========================================================================
-
-CheckSumError:
-		bsr.w	VDPSetupGame
-		move.l	#$C0000000,(vdp_control_port).l ; set VDP to CRAM write
-		moveq	#$3F,d7
-
-	@fillred:
-		move.w	#cRed,(vdp_data_port).l ; fill palette with red
-		dbf	d7,@fillred	; repeat $3F more times
-
-	@endlessloop:
-		bra.s	@endlessloop
-; ===========================================================================
-
 BusError:
 		move.b	#2,(v_errortype).w
-		bra.s	loc_43A
+		bra.s	GetAddressValue
 
 AddressError:
 		move.b	#4,(v_errortype).w
-		bra.s	loc_43A
+		bra.s	GetAddressValue
 
 IllegalInstr:
 		move.b	#6,(v_errortype).w
 		addq.l	#2,2(sp)
-		bra.s	loc_462
+		bra.s	GetInsturctionValue
 
 ZeroDivide:
 		move.b	#8,(v_errortype).w
-		bra.s	loc_462
+		bra.s	GetInsturctionValue
 
 ChkInstr:
 		move.b	#$A,(v_errortype).w
-		bra.s	loc_462
+		bra.s	GetInsturctionValue
 
 TrapvInstr:
 		move.b	#$C,(v_errortype).w
-		bra.s	loc_462
+		bra.s	GetInsturctionValue
 
 PrivilegeViol:
 		move.b	#$E,(v_errortype).w
-		bra.s	loc_462
+		bra.s	GetInsturctionValue
 
 Trace:
 		move.b	#$10,(v_errortype).w
-		bra.s	loc_462
+		bra.s	GetInsturctionValue
 
 Line1010Emu:
 		move.b	#$12,(v_errortype).w
 		addq.l	#2,2(sp)
-		bra.s	loc_462
+		bra.s	GetInsturctionValue
 
 Line1111Emu:
 		move.b	#$14,(v_errortype).w
 		addq.l	#2,2(sp)
-		bra.s	loc_462
+		bra.s	GetInsturctionValue
 
 ErrorExcept:
 		move.b	#0,(v_errortype).w
-		bra.s	loc_462
+		bra.s	GetInsturctionValue
 ; ===========================================================================
-
-loc_43A:
+;loc_43A:
+GetAddressValue:
 		disable_ints
 		addq.w	#2,sp
 		move.l	(sp)+,(v_spbuffer).w
@@ -408,21 +394,22 @@ loc_43A:
 		bsr.w	ShowErrorValue
 		move.l	(v_spbuffer).w,d0
 		bsr.w	ShowErrorValue
-		bra.s	loc_478
+		bra.s	TryErrorAdvance
 ; ===========================================================================
-
-loc_462:
+;loc_462:
+GetInsturctionValue:
 		disable_ints
 		movem.l	d0-a7,(v_regbuffer).w
 		bsr.w	ShowErrorMessage
 		move.l	2(sp),d0
 		bsr.w	ShowErrorValue
-
-loc_478:
+;loc_478:
+TryErrorAdvance:
 		bsr.w	ErrorWaitForC
 		movem.l	(v_regbuffer).w,d0-a7
 		enable_ints
 		rte
+
 
 ShowErrorMessage:
 		lea	(vdp_data_port).l,a6
