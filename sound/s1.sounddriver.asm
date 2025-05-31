@@ -2443,6 +2443,7 @@ cfOpF9:
 		bra.w	WriteFMI
 ; ---------------------------------------------------------------------------
 ; Music data
+	include	"sound/_smps2asm_inc.asm"
 ; ---------------------------------------------------------------------------
 Music81:	include	"sound/music/Mus81 - GHZ.asm"
 		even
