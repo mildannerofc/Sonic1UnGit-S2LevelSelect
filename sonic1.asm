@@ -405,7 +405,7 @@ GetInsturctionValue:
 		disable_ints ;disable interrupts
 		movem.l	d0-a7,(v_regbuffer).w ; store the current instruction that caused the crash
 		bsr.w	ShowErrorMessage
-		move.l	2(sp),d0 ;move the stack popinter information we've collected to d0
+		move.l	2(sp),d0 ;move the stack pointer information we've collected to d0
 		bsr.w	ShowErrorValue	;show us the insturction  in hex format
 ;loc_478:
 TryErrorAdvance:
