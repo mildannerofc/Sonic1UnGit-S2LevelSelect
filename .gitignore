@@ -75,3 +75,8 @@ sound/sfx/cmp/SndCD - Switch.bin
 sound/sfx/cmp/SndCE - Ring Left Speaker.bin
 sound/sfx/cmp/SndCF - Signpost.bin
 sound/sfx/cmp/SndD0 - Waterfall.bin
+s1built.debug.lst
+sonic1.lst
+s1built.debug.bin
+s1built.debug.sym
+s1built.sym

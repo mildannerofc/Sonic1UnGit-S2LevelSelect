@@ -10,6 +10,7 @@
 	include	"_Constants.asm"
 	include	"_Variables.asm"
 	include	"_Macros.asm"
+	include	"_debug/_Debugger.asm"
 EnableSRAM:	equ 0	; change to 1 to enable SRAM
 BackupSRAM:	equ 1
 AddressSRAM:	equ 3	; 0 = odd+even; 2 = even only; 3 = odd only
@@ -19,7 +20,8 @@ ZoneCount:	equ 6	; discrete zones are: GHZ, MZ, SYZ, LZ, SLZ, and SBZ
 ; ===========================================================================
 
 StartOfRom:
-Vectors:	dc.l v_systemstack&$FFFFFF	; Initial stack pointer value
+Vectors:
+		dc.l v_systemstack&$FFFFFF	; Initial stack pointer value
 		dc.l EntryPoint			; Start of program
 		dc.l BusError			; Bus error
 		dc.l AddressError		; Address error (4)
@@ -309,7 +311,12 @@ GameInit:
         jsr     MegaPCM_LoadSampleTable
 		tst.w   d0 ; was sample table loaded successfully?
 		beq.s   @SampleTableOk ; if yes, branch
+		;ifdef __DEBUG__
+		; for MD Debugger v.2.5 or above
+		;	RaiseError "MegaPCM_LoadSampleTable returned %<.b d0>", MPCM_Debugger_LoadSampleTableException
+		;else
 		illegal
+
 @SampleTableOk:
 
 MainGameLoop:
@@ -334,163 +341,7 @@ ptr_GM_Ending:	bra.w	GM_Ending	; End of game sequence ($18)
 ptr_GM_Credits:	bra.w	GM_Credits	; Credits ($1C)
 
 		rts
-; ===========================================================================
-; Sonic 1 Error Handler Code: Gets The Address, Insturction, and Stack pointer
-; and displays it so developers can debug their code.
-; v_errortype tells the handler what text to show
-; ===========================================================================
-BusError: ; Hardware Error, CPU cannot physically address this; shouldn't show up
-		move.b	#2,(v_errortype).w
-		bra.s	GetAddressValue	;Error comes from an address
-
-AddressError: ; Hardware Error, Address is odd, and not even; and the CPU cannot access it
-		move.b	#4,(v_errortype).w
-		bra.s	GetAddressValue	;Error comes from an address
-
-IllegalInstr: ;Instruction is Unrecognized, these are functions that aren't guarenteed to exist (but the ROM still compiles with them)
-		move.b	#6,(v_errortype).w
-		addq.l	#2,2(sp) ;Help us get to the instruction by adding to the stack pointer
-		bra.s	GetInsturctionValue ;Error comes from an instruction
-
-ZeroDivide: ; Pretty simple, we've managed to divide by 0 somehow, which doesn't result in anything except this error
-		move.b	#8,(v_errortype).w
-		bra.s	GetInsturctionValue ;Error comes from an instruction
-
-ChkInstr: ; Out of bounds insturction resulted from a check
-		move.b	#$A,(v_errortype).w
-		bra.s	GetInsturctionValue ;Error comes from an instruction
-
-TrapvInstr: ; Insturction is overflowing
-		move.b	#$C,(v_errortype).w
-		bra.s	GetInsturctionValue ;Error comes from an instruction
-
-PrivilegeViol: ;We are using a insturction that we aren't allowed to use (kind of like using sudo without beign a sudoer)
-		move.b	#$E,(v_errortype).w
-		bra.s	GetInsturctionValue ;Error comes from an instruction
-
-Trace: ;We're in trace mode, this shouldn't ever show up
-		move.b	#$10,(v_errortype).w
-		bra.s	GetInsturctionValue ;Error comes from an instruction
-
-Line1010Emu: ;Unimplemented Instruction, usually for floating point errors
-		move.b	#$12,(v_errortype).w
-		addq.l	#2,2(sp) ;Help us get to the instruction by adding to the stack pointer
-		bra.s	GetInsturctionValue ;Error comes from an instruction
-
-Line1111Emu: ;Unimplemented Instruction, more floating point stuff
-		move.b	#$14,(v_errortype).w
-		addq.l	#2,2(sp) ;Help us get to the instruction by adding to the stack pointer
-		bra.s	GetInsturctionValue ;Error comes from an instruction
-
-ErrorExcept: ;Exception, this prevents a real error from happening, and returns an exception; kind of like try and except in python
-		move.b	#0,(v_errortype).w
-		bra.s	GetInsturctionValue ;Error comes from an instruction
-; ===========================================================================
-;loc_43A:
-GetAddressValue:
-		disable_ints ;disable interrupts
-		addq.w	#2,sp ;add 2 to the stack pointer to get us the buffer values
-		move.l	(sp)+,(v_spbuffer).w ; Save the stack pointer (addresses; hence why it isn;t in GetInsturctionValue)
-		addq.w	#2,sp ; add 2 to the stack pointer to get us the register values
-		movem.l	d0-a7,(v_regbuffer).w ;store the registers as they were when the crash happened
-		bsr.w	ShowErrorMessage ; show what type of error we have
-		move.l	2(sp),d0 ;move the stack pointer information we've collected to d0
-		bsr.w	ShowErrorValue ;show the address
-		move.l	(v_spbuffer).w,d0 ; store the stack pointer buffer to d0 so we can show it
-		bsr.w	ShowErrorValue ;show the stack pointer information that will help us debug the error
-		bra.s	TryErrorAdvance ; Attempt to get past the error when C is pressed
-; ===========================================================================
-;loc_462:
-GetInsturctionValue:
-		disable_ints ;disable interrupts
-		movem.l	d0-a7,(v_regbuffer).w ; store the current instruction that caused the crash
-		bsr.w	ShowErrorMessage
-		move.l	2(sp),d0 ;move the stack pointer information we've collected to d0
-		bsr.w	ShowErrorValue	;show us the insturction  in hex format
-;loc_478:
-TryErrorAdvance:
-		bsr.w	ErrorWaitForC	;Wait for the player to push C to do anything
-		movem.l	(v_regbuffer).w,d0-a7 ;restore the RAM to the game and attempt to bypass the error
-		enable_ints	;reenable intterupts to continue playing
-		rte	;Return to exception (continue the game code)
-
-
-ShowErrorMessage:
-		lea	(vdp_data_port).l,a6
-		locVRAM	$F800
-		lea	(Art_Text).l,a0
-		move.w	#$27F,d1
-	@loadgfx:
-		move.w	(a0)+,(a6)
-		dbf	d1,@loadgfx
-
-		moveq	#0,d0		; clear d0
-		move.b	(v_errortype).w,d0 ; load error code
-		move.w	ErrorText(pc,d0.w),d0
-		lea	ErrorText(pc,d0.w),a0
-		locVRAM	(vram_fg+$604)
-		moveq	#$12,d1		; number of characters (minus 1)
-
-	@showchars:
-		moveq	#0,d0
-		move.b	(a0)+,d0
-		addi.w	#$790,d0
-		move.w	d0,(a6)
-		dbf	d1,@showchars	; repeat for number of characters
-		rts
-; End of function ShowErrorMessage
-
-; ===========================================================================
-ErrorText:	dc.w @exception-ErrorText, @bus-ErrorText
-		dc.w @address-ErrorText, @illinstruct-ErrorText
-		dc.w @zerodivide-ErrorText, @chkinstruct-ErrorText
-		dc.w @trapv-ErrorText, @privilege-ErrorText
-		dc.w @trace-ErrorText, @line1010-ErrorText
-		dc.w @line1111-ErrorText
-@exception:	dc.b "ERROR EXCEPTION    "
-@bus:		dc.b "BUS ERROR          "
-@address:	dc.b "ADDRESS ERROR      "
-@illinstruct:	dc.b "ILLEGAL INSTRUCTION"
-@zerodivide:	dc.b "@ERO DIVIDE        "
-@chkinstruct:	dc.b "CHK INSTRUCTION    "
-@trapv:		dc.b "TRAPV INSTRUCTION  "
-@privilege:	dc.b "PRIVILEGE VIOLATION"
-@trace:		dc.b "TRACE              "
-@line1010:	dc.b "LINE 1010 EMULATOR "
-@line1111:	dc.b "LINE 1111 EMULATOR "
-		even
-
-ShowErrorValue:
-		move.w	#$7CA,(a6)	; display "$" symbol
-		moveq	#7,d2
-
-	@loop:
-		rol.l	#4,d0
-		bsr.s	@shownumber	; display 8 numbers
-		dbf	d2,@loop
-		rts
-; End of function ShowErrorValue
-
-@shownumber:
-		move.w	d0,d1
-		andi.w	#$F,d1
-		cmpi.w	#$A,d1
-		blo.s	@chars0to9
-		addq.w	#7,d1		; add 7 for characters A-F
-
-	@chars0to9:
-		addi.w	#$7C0,d1
-		move.w	d1,(a6)
-		rts
-; End of function sub_5CA
-
-ErrorWaitForC:
-		bsr.w	ReadJoypads
-		cmpi.b	#btnC,(v_jpadpress1).w ; is button C pressed?
-		bne.w	ErrorWaitForC	; if not, branch
-		rts
-; End of function ErrorWaitForC
-
+;Sonic 1's error handler was here, but we have vladik's in now
 ; ===========================================================================
 
 Art_Text:	incbin	"artunc\menutext.bin" ; text used in level select, the error handler, and debug mode
@@ -38639,5 +38490,12 @@ ObjPos_Null:	dc.b $FF, $FF, 0, 0, 0,	0
 
 SoundDriver:	include "sound\s1.sounddriver.asm"
 		even
-
+	include	"_debug/_ErrorHandler.asm"
+; --------------------------------------------------------------
+; WARNING!
+;	DO NOT put any data from now on! DO NOT use ROM padding!
+;	Symbol data should be appended here after ROM is compiled
+;	by ConvSym utility, otherwise debugger modules won't be able
+;	to resolve symbol names.
+; --------------------------------------------------------------
 EndOfRom:	END
