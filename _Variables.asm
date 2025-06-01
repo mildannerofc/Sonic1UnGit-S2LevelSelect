@@ -186,6 +186,8 @@ v_hbla_hreg:	equ $FFFFF624	; VDP H.interrupt register buffer (8Axx) (2 bytes)
 v_hbla_line:	equ $FFFFF625	; screen line where water starts and palette is changed by HBlank
 v_pfade_start:	equ $FFFFF626	; palette fading - start position in bytes
 v_pfade_size:	equ $FFFFF627	; palette fading - number of colours
+v_vbla_0e_counter:	equ $FFFFF628
+
 v_vbla_routine:	equ $FFFFF62A	; VBlank - routine counter
 v_spritecount:	equ $FFFFF62C	; number of sprites on-screen
 v_pcyc_num:	equ $FFFFF632	; palette cycling - current reference number (2 bytes)
@@ -200,13 +202,17 @@ v_waterpos3:	equ $FFFFF64A	; water height, next target (2 bytes)
 f_water:		equ $FFFFF64C	; flag set for water
 v_wtr_routine:	equ $FFFFF64D	; water event - routine counter
 f_wtr_state:	equ $FFFFF64E	; water palette state when water is above/below the screen (00 = partly/all dry; 01 = all underwater)
-
+f_doupdatesinhblank:	equ $FFFFF64F
 v_pal_buffer:	equ $FFFFF650	; palette data buffer (used for palette cycling) ($30 bytes)
 v_plc_buffer:	equ $FFFFF680	; pattern load cues buffer (maximum $10 PLCs) ($60 bytes)
 v_ptrnemcode:	equ $FFFFF6E0	; pointer for nemesis decompression code ($1502 or $150C) (4 bytes)
-
+v_plc_repeatcount:	equ $FFFFF6E4
+v_plc_paletteindex:	equ $FFFFF6E8
+v_plc_previousrow:	equ $FFFFF6EC
+v_plc_dataword:		equ $FFFFF6F0
+v_plc_shiftvalue:	equ $FFFFF6F4
 f_plc_execute:	equ $FFFFF6F8	; flag set for pattern load cue execution (2 bytes)
-
+v_plc_framepatternsleft:	equ $FFFFF6FA
 v_screenposx:	equ $FFFFF700	; screen position x (2 bytes)
 v_screenposy:	equ $FFFFF704	; screen position y (2 bytes)
 v_bgscreenposx:	equ $FFFFF708	; background screen position x (2 bytes)

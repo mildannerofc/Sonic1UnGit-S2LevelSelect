@@ -224,7 +224,7 @@ SetupValues:	dc.w $8000		; VDP register start number
 		dc.w 0			; VDP $95/96 - DMA source
 		dc.b $80		; VDP $97 - DMA fill VRAM
 		dc.l $40000080		; VRAM address 0
-
+; RobiWanKenobi: this is Z80 code, hence this being a blob of hex
 		dc.b $AF		; xor a
 		dc.b $01, $D9, $1F	; ld bc,1fd9h
 		dc.b $11, $27, $00	; ld de,0027h
@@ -281,7 +281,7 @@ CheckSumCheck:
 ; 	bne.w	CheckSumError	; if they don't match, branch
 
 	CheckSumOk:
-		lea	($FFFFFE00).w,a6
+		lea	(v_systemstack).w,a6
 		moveq	#0,d7
 		move.w	#$7F,d6
 	@clearRAM:
@@ -642,7 +642,7 @@ VBla_08:
 		movem.l	d0-d1,(v_fg_scroll_flags_dup).w
 		cmpi.b	#96,(v_hbla_line).w
 		bhs.s	Demo_Time
-		move.b	#1,($FFFFF64F).w
+		move.b	#1,(f_doupdatesinhblank).w
 		addq.l	#4,sp
 		bra.w	VBla_Exit
 
@@ -726,7 +726,7 @@ VBla_0C:
 
 VBla_0E:
 		bsr.w	sub_106E
-		addq.b	#1,($FFFFF628).w
+		addq.b	#1,(v_vbla_0e_counter).w
 		move.b	#$E,(v_vbla_routine).w
 		rts
 ; ===========================================================================
@@ -824,7 +824,7 @@ HBlank:
 		move.l	(a0)+,(a1)
 		move.w	#$8A00+223,4(a1) ; reset HBlank register
 		movem.l	(sp)+,a0-a1
-		tst.b	($FFFFF64F).w
+		tst.b	(f_doupdatesinhblank).w
 		bne.s	loc_119E
 
 	@nochg:
@@ -832,7 +832,7 @@ HBlank:
 ; ===========================================================================
 
 loc_119E:
-		clr.b	($FFFFF64F).w
+		clr.b	(f_doupdatesinhblank).w
 		movem.l	d0-a6,-(sp)
 		bsr.w	Demo_Time
 		jsr	(UpdateMusic).l
@@ -861,7 +861,7 @@ JoypadInit:
 ReadJoypads:
 		lea	(v_jpadhold1).w,a0 ; address where joypad states are written
 		lea	(z80_port_1_data+1).l,a1	; first	joypad port
-		bsr.s	.read		; do the first joypad
+		bsr.s	@read		; do the first joypad
 		addq.w	#2,a1		; do the second	joypad
 
 	@read:
@@ -1413,11 +1413,11 @@ loc_160E:
 		moveq	#0,d0
 		move.l	a0,(v_plc_buffer).w
 		move.l	a3,(v_ptrnemcode).w
-		move.l	d0,($FFFFF6E4).w
-		move.l	d0,($FFFFF6E8).w
-		move.l	d0,($FFFFF6EC).w
-		move.l	d5,($FFFFF6F0).w
-		move.l	d6,($FFFFF6F4).w
+		move.l	d0,(v_plc_repeatcount).w
+		move.l	d0,(v_plc_paletteindex).w
+		move.l	d0,(v_plc_previousrow).w
+		move.l	d5,(v_plc_dataword).w
+		move.l	d6,(v_plc_shiftvalue).w
 
 Rplc_Exit:
 		rts
@@ -1426,10 +1426,10 @@ Rplc_Exit:
 sub_1642:
 		tst.w	(f_plc_execute).w
 		beq.w	locret_16DA
-		move.w	#9,($FFFFF6FA).w
+		move.w	#9,(v_plc_framepatternsleft).w
 		moveq	#0,d0
-		move.w	($FFFFF684).w,d0
-		addi.w	#$120,($FFFFF684).w
+		move.w	(v_plc_buffer+4).w,d0
+		addi.w	#$120,(v_plc_buffer+4).w
 		bra.s	loc_1676
 ; End of function sub_1642
 
@@ -1437,10 +1437,10 @@ sub_1642:
 ProcessDPLC2:
 		tst.w	(f_plc_execute).w
 		beq.s	locret_16DA
-		move.w	#3,($FFFFF6FA).w
+		move.w	#3,(v_plc_framepatternsleft).w
 		moveq	#0,d0
-		move.w	($FFFFF684).w,d0
-		addi.w	#$60,($FFFFF684).w
+		move.w	(v_plc_buffer+4).w,d0
+		addi.w	#$60,(v_plc_buffer+4).w
 
 loc_1676:
 		lea	(vdp_control_port).l,a4
@@ -1452,11 +1452,11 @@ loc_1676:
 		subq.w	#4,a4
 		movea.l	(v_plc_buffer).w,a0
 		movea.l	(v_ptrnemcode).w,a3
-		move.l	($FFFFF6E4).w,d0
-		move.l	($FFFFF6E8).w,d1
-		move.l	($FFFFF6EC).w,d2
-		move.l	($FFFFF6F0).w,d5
-		move.l	($FFFFF6F4).w,d6
+		move.l	(v_plc_repeatcount).w,d0
+		move.l	(v_plc_paletteindex).w,d1
+		move.l	(v_plc_previousrow).w,d2
+		move.l	(v_plc_dataword).w,d5
+		move.l	(v_plc_shiftvalue).w,d6
 		lea	(v_ngfx_buffer).w,a1
 
 loc_16AA:
@@ -1464,15 +1464,15 @@ loc_16AA:
 		bsr.w	NemPCD_NewRow
 		subq.w	#1,(f_plc_execute).w
 		beq.s	loc_16DC
-		subq.w	#1,($FFFFF6FA).w
+		subq.w	#1,(v_plc_framepatternsleft).w
 		bne.s	loc_16AA
 		move.l	a0,(v_plc_buffer).w
 		move.l	a3,(v_ptrnemcode).w
-		move.l	d0,($FFFFF6E4).w
-		move.l	d1,($FFFFF6E8).w
-		move.l	d2,($FFFFF6EC).w
-		move.l	d5,($FFFFF6F0).w
-		move.l	d6,($FFFFF6F4).w
+		move.l	d0,(v_plc_repeatcount).w
+		move.l	d1,(v_plc_paletteindex).w
+		move.l	d2,(v_plc_previousrow).w
+		move.l	d5,(v_plc_dataword).w
+		move.l	d6,(v_plc_shiftvalue).w
 
 locret_16DA:
 		rts
@@ -3624,7 +3624,7 @@ Level_ClrRam:
 		move.l	d0,(a1)+
 		dbf	d1,Level_ClrObjRam ; clear object RAM
 
-		lea	($FFFFF628).w,a1
+		lea	(v_vbla_0e_counter).w,a1
 		moveq	#0,d0
 		move.w	#$15,d1
 
@@ -5431,7 +5431,7 @@ GM_Ending:
 		move.l	d0,(a1)+
 		dbf	d1,End_ClrObjRam ; clear object RAM
 
-		lea	($FFFFF628).w,a1
+		lea	(v_vbla_0e_counter).w,a1
 		moveq	#0,d0
 		move.w	#$15,d1
 	End_ClrRam1:
