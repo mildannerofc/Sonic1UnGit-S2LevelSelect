@@ -845,25 +845,24 @@ loc_119E:
 ; ---------------------------------------------------------------------------
 
 JoypadInit:
-
-
 		moveq	#$40,d0
-		move.b	d0,($A10009).l	; init port 1 (joypad 1)
-		move.b	d0,($A1000B).l	; init port 2 (joypad 2)
-		move.b	d0,($A1000D).l	; init port 3 (expansion/extra)
-
+		move.b	d0,(z80_port_1_control+1).l	; init port 1 (joypad 1)
+		move.b	d0,(z80_port_2_control+1).l	; init port 2 (joypad 2)
+		move.b	d0,(z80_expansion_control+1).l	; init port 3 (expansion/extra)
 		rts
 ; End of function JoypadInit
 
 ; ---------------------------------------------------------------------------
-; Subroutine to read joypad input, and send it to the RAM
+; Subroutine to	read joypad input, and send it to the RAM
 ; ---------------------------------------------------------------------------
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
 
 ReadJoypads:
 		lea	(v_jpadhold1).w,a0 ; address where joypad states are written
-		lea	($A10003).l,a1	; first joypad port
-		bsr.s	@read		; do the first joypad
-		addq.w	#2,a1		; do the second joypad
+		lea	(z80_port_1_data+1).l,a1	; first	joypad port
+		bsr.s	.read		; do the first joypad
+		addq.w	#2,a1		; do the second	joypad
 
 	@read:
 		move.b	#0,(a1)
