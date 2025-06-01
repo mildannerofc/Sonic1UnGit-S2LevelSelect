@@ -24491,7 +24491,7 @@ Sonic_Floor:
 		jsr	(CalcAngle).l
 		move.b	d0,($FFFFFFEC).w ;RobiWanKenobi: these are just called unused in AS
 		subi.b	#$20,d0
-		move.b	d0,($FFFFFFED).w ; RobiWanKenobi: these really don't do an-ything
+		move.b	d0,($FFFFFFED).w ; RobiWanKenobi: these really don't do anything
 		andi.b	#$C0,d0
 		move.b	d0,($FFFFFFEE).w
 		cmpi.b	#$40,d0
