@@ -4447,10 +4447,7 @@ DemoEndDataPtr:	dc.l Demo_EndGHZ1	; demos run during the credits
 		dc.l Demo_EndSBZ1
 		dc.l Demo_EndSBZ2
 		dc.l Demo_EndGHZ2
-
-		dc.b 0,	$8B, 8,	$37, 0,	$42, 8,	$5C, 0,	$6A, 8,	$5F, 0,	$2F, 8,	$2C
-		dc.b 0,	$21, 8,	3, $28,	$30, 8,	8, 0, $2E, 8, $15, 0, $F, 8, $46
-		dc.b 0,	$1A, 8,	$FF, 8,	$CA, 0,	0, 0, 0, 0, 0, 0, 0, 0,	0
+Demo_Unused:	incbin	"demodata\Intro - Unused.bin"
 		even
 
 ; ---------------------------------------------------------------------------
@@ -24492,7 +24489,7 @@ Sonic_Floor:
 		move.w	obVelX(a0),d1
 		move.w	obVelY(a0),d2
 		jsr	(CalcAngle).l
-		move.b	d0,($FFFFFFEC).w
+		move.b	d0,($FFFFFFEC).w ;RobiWanKenobi: these are just called unused in AS
 		subi.b	#$20,d0
 		move.b	d0,($FFFFFFED).w
 		andi.b	#$C0,d0
