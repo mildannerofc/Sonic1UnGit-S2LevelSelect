@@ -2931,7 +2931,7 @@ GM_Sega:
 
 		tst.b   (v_megadrive).w	; is console Japanese?
 		bmi.s   @loadpal
-		copyTilemap	$FF0A40,$C53A,2,1 ; hide "TM" with a white rectangle
+		copyTilemap	(v_256x256+$A40),$C53A,2,1 ; hide "TM" with a white rectangle
 
 	@loadpal:
 		moveq	#palid_SegaBG,d0
@@ -3693,7 +3693,7 @@ Level_LoadPal:
 		bsr.w	PalLoad3_Water	; load underwater palette
 		tst.b	(v_lastlamp).w
 		beq.s	Level_GetBgm
-		move.b	($FFFFFE53).w,(f_wtr_state).w
+		move.b	(v_lamp_wtrstat).w,(f_wtr_state).w
 
 Level_GetBgm:
 		tst.w	(f_demo).w
