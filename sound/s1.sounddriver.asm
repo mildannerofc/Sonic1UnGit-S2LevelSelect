@@ -105,27 +105,6 @@ SoundPriorities:
 
 ; sub_71B4C:
 UpdateMusic:
-		stopZ80
-		nop	
-		nop	
-		nop	
-; loc_71B5A:
-@updateloop:
-		btst	#0,(z80_bus_request).l		; Is the z80 busy?
-		bne.s	@updateloop			; If so, wait
-
-		btst	#7,(z80_dac_status).l		; Is DAC accepting new samples?
-		beq.s	@driverinput			; Branch if yes
-		startZ80
-		nop	
-		nop	
-		nop	
-		nop	
-		nop	
-		bra.s	UpdateMusic
-; ===========================================================================
-; loc_71B82:
-@driverinput:
 		lea	(v_snddriver_ram&$FFFFFF).l,a6
 		clr.b	f_voice_selector(a6)
 		tst.b	f_pausemusic(a6)		; is music paused?
@@ -217,11 +196,11 @@ UpdateMusic:
 @specfmdone:
 		adda.w	#TrackSz,a5
 		tst.b	(a5)			; Is track playing (TrackPlaybackControl)
-		bpl.s	DoStartZ80		; Branch if not
+		bpl.s	Do		; Branch if not
 		jsr	PSGUpdateTrack(pc)
 ; loc_71C44:
-DoStartZ80:
-		startZ80
+Do:
+
 		rts	
 ; End of function UpdateMusic
 
@@ -260,29 +239,20 @@ DACUpdateTrack:
 		jsr	SetDuration(pc)
 ; loc_71C88:
 @gotsampleduration:
-		move.l	a4,TrackDataPointer(a5) ; Save pointer
-		btst	#2,(a5)			; Is track being overridden? (TrackPlaybackControl)
-		bne.s	@locret			; Return if yes
-		moveq	#0,d0
-		move.b	TrackSavedDAC(a5),d0	; Get sample
-		cmpi.b	#$80,d0			; Is it a rest?
-		beq.s	@locret			; Return if yes
-		btst	#3,d0			; Is bit 3 set (samples between $88-$8F)?
-		bne.s	@timpani		; Various timpani
-		move.b	d0,(z80_dac_sample).l
+		move.l  a4,TrackDataPointer(a5) ; Save pointer
+		btst    #2,TrackPlaybackControl(a5) ; Is track being overridden?
+		bne.s   @locret ; Return if yes
+		moveq   #0,d0
+		move.b  TrackSavedDAC(a5),d0 ; Get sample
+		cmpi.b  #$80,d0 ; Is it a rest?
+		beq.s   @locret ; Return if yes
+
+		MPCM_stopZ80 
+		move.b  d0, MPCM_Z80_RAM+Z_MPCM_CommandInput ; ++ send DAC sample to Mega PCM
+		MPCM_startZ80 ; ++
 ; locret_71CAA:
 @locret:
-		rts	
-; ===========================================================================
-; loc_71CAC:
-@timpani:
-		subi.b	#$88,d0		; Convert into an index
-		move.b	DAC_sample_rate(pc,d0.w),d0
-		; Warning: this affects the raw pitch of sample $83, meaning it will
-		; use this value from then on.
-		move.b	d0,(z80_dac3_pitch).l
-		move.b	#$83,(z80_dac_sample).l	; Use timpani
-		rts	
+		rts
 ; End of function DACUpdateTrack
 
 ; ===========================================================================
@@ -539,7 +509,7 @@ PauseMusic:
 		dbf	d3,@noteoffloop
 
 		jsr	PSGSilenceAll(pc)
-		bra.w	DoStartZ80
+		bra.w	Do
 ; ===========================================================================
 ; loc_71E94:
 @unpausemusic:
@@ -587,7 +557,7 @@ PauseMusic:
 		jsr	WriteFMIorII(pc)
 ; loc_71EFE:
 @unpausedallfm:
-		bra.w	DoStartZ80
+		bra.w	Do
 
 ; ---------------------------------------------------------------------------
 ; Subroutine to	play a sound or	music track
@@ -687,21 +657,8 @@ ptr_flgend
 ; ---------------------------------------------------------------------------
 ; Sound_E1: PlaySega:
 PlaySegaSound:
-		move.b	#$88,(z80_dac_sample).l	; Queue Sega PCM
-		startZ80
-		move.w	#$11,d1
-; loc_71FC0:
-@busyloop_outer:
-		move.w	#-1,d0
-; loc_71FC4:
-@busyloop:
-		nop	
-		dbf	d0,@busyloop
-
-		dbf	d1,@busyloop_outer
-
-		addq.w	#4,sp	; Tamper return value so we don't return to caller
-		rts	
+                moveq   #$FFFFFF8C, d0          ; ++ request SEGA PCM sample
+                jmp     MegaPCM_PlaySample      ; ++
 ; ===========================================================================
 ; ---------------------------------------------------------------------------
 ; Play music track $81-$9F
@@ -1598,78 +1555,64 @@ locret_72714:
 ; ===========================================================================
 ; loc_72716:
 WriteFMIorIIMain:
-		btst	#2,(a5)		; Is track being overriden by sfx? (TrackPlaybackControl)
-		bne.s	@locret		; Return if yes
-		bra.w	WriteFMIorII
+                btst    #2,TrackPlaybackControl(a5); Is track being overriden by sfx?
+                bne.s   @locret                         ; Return if yes
+                bra.w   WriteFMIorII
 ; ===========================================================================
 ; locret_72720:
 @locret:
-		rts	
+                rts
 
-; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+; ||||||||||||||| S U B R O U T I N E |||||||||||||||||||||||||||||||||||||||
 
 ; sub_72722:
 WriteFMIorII:
-		btst	#2,TrackVoiceControl(a5)	; Is this bound for part I or II?
-		bne.s	WriteFMIIPart			; Branch if for part II
-		add.b	TrackVoiceControl(a5),d0	; Add in voice control bits
-; End of function WriteFMIorII
+                move.b  TrackVoiceControl(a5), d2
+                subq.b  #4, d2                          ; Is this bound for part I or II?
+                bcc.s   WriteFMIIPart                   ; If yes, branch
+                addq.b  #4, d2                          ; Add in voice control bits
+                add.b   d2, d0                          ;
 
-
-; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
-
-; Strangely, despite this driver being SMPS 68k Type 1b,
-; WriteFMI and WriteFMII are the Type 1a versions.
-; In Sonic 1's prototype, they were the Type 1b versions.
-; I wonder why they were changed?
-
-; sub_7272E:
+; ---------------------------------------------------------------------------
 WriteFMI:
-		move.b	(ym2612_a0).l,d2
-		btst	#7,d2		; Is FM busy?
-		bne.s	WriteFMI	; Loop if so
-		move.b	d0,(ym2612_a0).l
-		nop	
-		nop	
-		nop	
-; loc_72746:
-@waitloop:
-		move.b	(ym2612_a0).l,d2
-		btst	#7,d2		; Is FM busy?
-		bne.s	@waitloop	; Loop if so
-
-		move.b	d1,(ym2612_d0).l
-		rts	
+                MPCM_stopZ80
+                MPCM_ensureYMWriteReady
+@waitLoop:      tst.b   (ym2612_a0).l           ; is FM busy?
+                bmi.s   @waitLoop               ; branch if yes
+                move.b  d0, (ym2612_a0).l
+                nop
+                move.b  d1, (ym2612_d0).l
+                nop
+                nop
+@waitLoop2:     tst.b   (ym2612_a0).l           ; is FM busy?
+                bmi.s   @waitLoop2              ; branch if yes
+                move.b  #$2A, (ym2612_a0).l     ; restore DAC output for Mega PCM
+                MPCM_startZ80
+                rts
 ; End of function WriteFMI
 
 ; ===========================================================================
 ; loc_7275A:
 WriteFMIIPart:
-		move.b	TrackVoiceControl(a5),d2 ; Get voice control bits
-		bclr	#2,d2			; Clear chip toggle
-		add.b	d2,d0			; Add in to destination register
+                add.b   d2,d0                   ; Add in to destination register
 
-; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
-
-; sub_72764:
+; ---------------------------------------------------------------------------
 WriteFMII:
-		move.b	(ym2612_a0).l,d2
-		btst	#7,d2		; Is FM busy?
-		bne.s	WriteFMII	; Loop if so
-		move.b	d0,(ym2612_a1).l
-		nop	
-		nop	
-		nop	
-; loc_7277C:
-@waitloop:
-		move.b	(ym2612_a0).l,d2
-		btst	#7,d2		; Is FM busy?
-		bne.s	@waitloop	; Loop if so
-
-		move.b	d1,(ym2612_d1).l
-		rts	
+                MPCM_stopZ80
+                MPCM_ensureYMWriteReady
+@waitLoop:      tst.b   (ym2612_a0).l           ; is FM busy?
+                bmi.s   @waitLoop               ; branch if yes
+                move.b  d0, (ym2612_a1).l
+                nop
+                move.b  d1, (ym2612_d1).l
+                nop
+                nop
+@waitLoop2:     tst.b   (ym2612_a0).l           ; is FM busy?
+                bmi.s   @waitLoop2              ; branch if yes
+                move.b  #$2A, (ym2612_a0).l     ; restore DAC output for Mega PCM
+                MPCM_startZ80
+                rts
 ; End of function WriteFMII
-
 ; ===========================================================================
 ; ---------------------------------------------------------------------------
 ; FM Note Values: b-0 to a#8
@@ -2103,7 +2046,7 @@ cfFadeInToPrevious:
 		move.b	#$80,f_fadein_flag(a6)		; Trigger fade-in
 		move.b	#$28,v_fadein_counter(a6)	; Fade-in delay
 		clr.b	f_1up_playing(a6)
-		startZ80
+
 		addq.w	#8,sp		; Tamper return value so we don't return to caller
 		rts	
 ; ===========================================================================
@@ -2498,65 +2441,47 @@ cfOpF9:
 		move.b	#$8C,d0		; D1L/RR of Operator 4
 		move.b	#$F,d1		; Loaded with fixed value (max RR, 1TL)
 		bra.w	WriteFMI
-; ===========================================================================
-; ---------------------------------------------------------------------------
-; DAC driver
-; ---------------------------------------------------------------------------
-Kos_Z80:
-		; In this branch, the DAC driver is a binary blob. We do some
-		; hackery here to manually patch some of its pointers. In the
-		; AS branch, this driver is properly disassembled.
-		incbin	"sound\z80.bin", 0, $15
-		dc.b ((SegaPCM&$FF8000)/$8000)&1						; Least bit of bank ID (bit 15 of address)
-		incbin	"sound\z80.bin", $16, 6
-		dc.b ((SegaPCM&$FF8000)/$8000)>>1						; ... the remaining bits of bank ID (bits 16-23)
-		incbin	"sound\z80.bin", $1D, $93
-		dc.w ((SegaPCM&$FF)<<8)+((SegaPCM&$7F00)>>8)|$80				; Pointer to Sega PCM, relative to start of ROM bank (i.e., little_endian($8000 + SegaPCM&$7FFF)
-		incbin	"sound\z80.bin", $B2, 1
-		dc.w (((SegaPCM_End-SegaPCM)&$FF)<<8)+(((SegaPCM_End-SegaPCM)&$FF00)>>8)	; ... the size of the Sega PCM (little endian)
-		incbin	"sound\z80.bin", $B5, $16AB
-		even
-
 ; ---------------------------------------------------------------------------
 ; Music data
+	include	"sound/_smps2asm_inc.asm"
 ; ---------------------------------------------------------------------------
-Music81:	incbin	"sound/music/Mus81 - GHZ.bin"
+Music81:	include	"sound/music/Mus81 - GHZ.asm"
 		even
-Music82:	incbin	"sound/music/Mus82 - LZ.bin"
+Music82:	include	"sound/music/Mus82 - LZ.asm"
 		even
-Music83:	incbin	"sound/music/Mus83 - MZ.bin"
+Music83:	include	"sound/music/Mus83 - MZ.asm"
 		even
-Music84:	incbin	"sound/music/Mus84 - SLZ.bin"
+Music84:	include	"sound/music/Mus84 - SLZ.asm"
 		even
-Music85:	incbin	"sound/music/Mus85 - SYZ.bin"
+Music85:	include	"sound/music/Mus85 - SYZ.asm"
 		even
-Music86:	incbin	"sound/music/Mus86 - SBZ.bin"
+Music86:	include	"sound/music/Mus86 - SBZ.asm"
 		even
-Music87:	incbin	"sound/music/Mus87 - Invincibility.bin"
+Music87:	include	"sound/music/Mus87 - Invincibility.asm"
 		even
-Music88:	incbin	"sound/music/Mus88 - Extra Life.bin"
+Music88:	include	"sound/music/Mus88 - Extra Life.asm"
 		even
-Music89:	incbin	"sound/music/Mus89 - Special Stage.bin"
+Music89:	include	"sound/music/Mus89 - Special Stage.asm"
 		even
-Music8A:	incbin	"sound/music/Mus8A - Title Screen.bin"
+Music8A:	include	"sound/music/Mus8A - Title Screen.asm"
 		even
-Music8B:	incbin	"sound/music/Mus8B - Ending.bin"
+Music8B:	include	"sound/music/Mus8B - Ending.asm"
 		even
-Music8C:	incbin	"sound/music/Mus8C - Boss.bin"
+Music8C:	include	"sound/music/Mus8C - Boss.asm"
 		even
-Music8D:	incbin	"sound/music/Mus8D - FZ.bin"
+Music8D:	include	"sound/music/Mus8D - FZ.asm"
 		even
-Music8E:	incbin	"sound/music/Mus8E - Sonic Got Through.bin"
+Music8E:	include	"sound/music/Mus8E - Sonic Got Through.asm"
 		even
-Music8F:	incbin	"sound/music/Mus8F - Game Over.bin"
+Music8F:	include	"sound/music/Mus8F - Game Over.asm"
 		even
-Music90:	incbin	"sound/music/Mus90 - Continue Screen.bin"
+Music90:	include	"sound/music/Mus90 - Continue Screen.asm"
 		even
-Music91:	incbin	"sound/music/Mus91 - Credits.bin"
+Music91:	include	"sound/music/Mus91 - Credits.asm"
 		even
-Music92:	incbin	"sound/music/Mus92 - Drowning.bin"
+Music92:	include	"sound/music/Mus92 - Drowning.asm"
 		even
-Music93:	incbin	"sound/music/Mus93 - Get Emerald.bin"
+Music93:	include	"sound/music/Mus93 - Get Emerald.asm"
 		even
 
 ; ---------------------------------------------------------------------------
@@ -2623,125 +2548,105 @@ ptr_specend
 ; ---------------------------------------------------------------------------
 ; Sound effect data
 ; ---------------------------------------------------------------------------
-SoundA0:	incbin	"sound/sfx/SndA0 - Jump.bin"
+SoundA0:	include	"sound/sfx/SndA0 - Jump.asm"
 		even
-SoundA1:	incbin	"sound/sfx/SndA1 - Lamppost.bin"
+SoundA1:	include	"sound/sfx/SndA1 - Lamppost.asm"
 		even
-SoundA2:	incbin	"sound/sfx/SndA2.bin"
+SoundA2:	include	"sound/sfx/SndA2.asm"
 		even
-SoundA3:	incbin	"sound/sfx/SndA3 - Death.bin"
+SoundA3:	include	"sound/sfx/SndA3 - Death.asm"
 		even
-SoundA4:	incbin	"sound/sfx/SndA4 - Skid.bin"
+SoundA4:	include	"sound/sfx/SndA4 - Skid.asm"
 		even
-SoundA5:	incbin	"sound/sfx/SndA5.bin"
+SoundA5:	include	"sound/sfx/SndA5.asm"
 		even
-SoundA6:	incbin	"sound/sfx/SndA6 - Hit Spikes.bin"
+SoundA6:	include	"sound/sfx/SndA6 - Hit Spikes.asm"
 		even
-SoundA7:	incbin	"sound/sfx/SndA7 - Push Block.bin"
+SoundA7:	include	"sound/sfx/SndA7 - Push Block.asm"
 		even
-SoundA8:	incbin	"sound/sfx/SndA8 - SS Goal.bin"
+SoundA8:	include	"sound/sfx/SndA8 - SS Goal.asm"
 		even
-SoundA9:	incbin	"sound/sfx/SndA9 - SS Item.bin"
+SoundA9:	include	"sound/sfx/SndA9 - SS Item.asm"
 		even
-SoundAA:	incbin	"sound/sfx/SndAA - Splash.bin"
+SoundAA:	include	"sound/sfx/SndAA - Splash.asm"
 		even
-SoundAB:	incbin	"sound/sfx/SndAB.bin"
+SoundAB:	include	"sound/sfx/SndAB.asm"
 		even
-SoundAC:	incbin	"sound/sfx/SndAC - Hit Boss.bin"
+SoundAC:	include	"sound/sfx/SndAC - Hit Boss.asm"
 		even
-SoundAD:	incbin	"sound/sfx/SndAD - Get Bubble.bin"
+SoundAD:	include	"sound/sfx/SndAD - Get Bubble.asm"
 		even
-SoundAE:	incbin	"sound/sfx/SndAE - Fireball.bin"
+SoundAE:	include	"sound/sfx/SndAE - Fireball.asm"
 		even
-SoundAF:	incbin	"sound/sfx/SndAF - Shield.bin"
+SoundAF:	include	"sound/sfx/SndAF - Shield.asm"
 		even
-SoundB0:	incbin	"sound/sfx/SndB0 - Saw.bin"
+SoundB0:	include	"sound/sfx/SndB0 - Saw.asm"
 		even
-SoundB1:	incbin	"sound/sfx/SndB1 - Electric.bin"
+SoundB1:	include	"sound/sfx/SndB1 - Electric.asm"
 		even
-SoundB2:	incbin	"sound/sfx/SndB2 - Drown Death.bin"
+SoundB2:	include	"sound/sfx/SndB2 - Drown Death.asm"
 		even
-SoundB3:	incbin	"sound/sfx/SndB3 - Flamethrower.bin"
+SoundB3:	include	"sound/sfx/SndB3 - Flamethrower.asm"
 		even
-SoundB4:	incbin	"sound/sfx/SndB4 - Bumper.bin"
+SoundB4:	include	"sound/sfx/SndB4 - Bumper.asm"
 		even
-SoundB5:	incbin	"sound/sfx/SndB5 - Ring.bin"
+SoundB5:	include	"sound/sfx/SndB5 - Ring.asm"
 		even
-SoundB6:	incbin	"sound/sfx/SndB6 - Spikes Move.bin"
+SoundB6:	include	"sound/sfx/SndB6 - Spikes Move.asm"
 		even
-SoundB7:	incbin	"sound/sfx/SndB7 - Rumbling.bin"
+SoundB7:	include	"sound/sfx/SndB7 - Rumbling.asm"
 		even
-SoundB8:	incbin	"sound/sfx/SndB8.bin"
+SoundB8:	include	"sound/sfx/SndB8.asm"
 		even
-SoundB9:	incbin	"sound/sfx/SndB9 - Collapse.bin"
+SoundB9:	include	"sound/sfx/SndB9 - Collapse.asm"
 		even
-SoundBA:	incbin	"sound/sfx/SndBA - SS Glass.bin"
+SoundBA:	include	"sound/sfx/SndBA - SS Glass.asm"
 		even
-SoundBB:	incbin	"sound/sfx/SndBB - Door.bin"
+SoundBB:	include	"sound/sfx/SndBB - Door.asm"
 		even
-SoundBC:	incbin	"sound/sfx/SndBC - Teleport.bin"
+SoundBC:	include	"sound/sfx/SndBC - Teleport.asm"
 		even
-SoundBD:	incbin	"sound/sfx/SndBD - ChainStomp.bin"
+SoundBD:	include	"sound/sfx/SndBD - ChainStomp.asm"
 		even
-SoundBE:	incbin	"sound/sfx/SndBE - Roll.bin"
+SoundBE:	include	"sound/sfx/SndBE - Roll.asm"
 		even
-SoundBF:	incbin	"sound/sfx/SndBF - Get Continue.bin"
+SoundBF:	include	"sound/sfx/SndBF - Get Continue.asm"
 		even
-SoundC0:	incbin	"sound/sfx/SndC0 - Basaran Flap.bin"
+SoundC0:	include	"sound/sfx/SndC0 - Basaran Flap.asm"
 		even
-SoundC1:	incbin	"sound/sfx/SndC1 - Break Item.bin"
+SoundC1:	include	"sound/sfx/SndC1 - Break Item.asm"
 		even
-SoundC2:	incbin	"sound/sfx/SndC2 - Drown Warning.bin"
+SoundC2:	include	"sound/sfx/SndC2 - Drown Warning.asm"
 		even
-SoundC3:	incbin	"sound/sfx/SndC3 - Giant Ring.bin"
+SoundC3:	include	"sound/sfx/SndC3 - Giant Ring.asm"
 		even
-SoundC4:	incbin	"sound/sfx/SndC4 - Bomb.bin"
+SoundC4:	include	"sound/sfx/SndC4 - Bomb.asm"
 		even
-SoundC5:	incbin	"sound/sfx/SndC5 - Cash Register.bin"
+SoundC5:	include	"sound/sfx/SndC5 - Cash Register.asm"
 		even
-SoundC6:	incbin	"sound/sfx/SndC6 - Ring Loss.bin"
+SoundC6:	include	"sound/sfx/SndC6 - Ring Loss.asm"
 		even
-SoundC7:	incbin	"sound/sfx/SndC7 - Chain Rising.bin"
+SoundC7:	include	"sound/sfx/SndC7 - Chain Rising.asm"
 		even
-SoundC8:	incbin	"sound/sfx/SndC8 - Burning.bin"
+SoundC8:	include	"sound/sfx/SndC8 - Burning.asm"
 		even
-SoundC9:	incbin	"sound/sfx/SndC9 - Hidden Bonus.bin"
+SoundC9:	include	"sound/sfx/SndC9 - Hidden Bonus.asm"
 		even
-SoundCA:	incbin	"sound/sfx/SndCA - Enter SS.bin"
+SoundCA:	include	"sound/sfx/SndCA - Enter SS.asm"
 		even
-SoundCB:	incbin	"sound/sfx/SndCB - Wall Smash.bin"
+SoundCB:	include	"sound/sfx/SndCB - Wall Smash.asm"
 		even
-SoundCC:	incbin	"sound/sfx/SndCC - Spring.bin"
+SoundCC:	include	"sound/sfx/SndCC - Spring.asm"
 		even
-SoundCD:	incbin	"sound/sfx/SndCD - Switch.bin"
+SoundCD:	include	"sound/sfx/SndCD - Switch.asm"
 		even
-SoundCE:	incbin	"sound/sfx/SndCE - Ring Left Speaker.bin"
+SoundCE:	include	"sound/sfx/SndCE - Ring Left Speaker.asm"
 		even
-SoundCF:	incbin	"sound/sfx/SndCF - Signpost.bin"
+SoundCF:	include	"sound/sfx/SndCF - Signpost.asm"
 		even
 
 ; ---------------------------------------------------------------------------
 ; Special sound effect data
 ; ---------------------------------------------------------------------------
-SoundD0:	incbin	"sound/sfx/SndD0 - Waterfall.bin"
+SoundD0:	include	"sound/sfx/SndD0 - Waterfall.asm"
 		even
-
-; ---------------------------------------------------------------------------
-; 'Sega' chant PCM sample
-; ---------------------------------------------------------------------------
-		; Don't let Sega sample cross $8000-byte boundary
-		; (DAC driver doesn't switch banks automatically)
-		if (*&$7FFF)+Size_of_SegaPCM>$8000
-			align $8000
-		endc
-SegaPCM:	incbin	"sound/dac/sega.pcm"
-SegaPCM_End
-		even
-
-		if SegaPCM_End-SegaPCM>$8000
-			inform 3,"Sega sound must fit within $8000 bytes, but you have a $%h byte Sega sound.",SegaPCM_End-SegaPCM
-		endc
-		if SegaPCM_End-SegaPCM>Size_of_SegaPCM
-			inform 3,"Size_of_SegaPCM = $%h, but you have a $%h byte Sega sound.",Size_of_SegaPCM,SegaPCM_End-SegaPCM
-		endc
-

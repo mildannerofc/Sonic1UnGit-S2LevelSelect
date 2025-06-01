@@ -10,7 +10,6 @@
 	include	"_Constants.asm"
 	include	"_Variables.asm"
 	include	"_Macros.asm"
-
 EnableSRAM:	equ 0	; change to 1 to enable SRAM
 BackupSRAM:	equ 1
 AddressSRAM:	equ 3	; 0 = odd+even; 2 = even only; 3 = odd only
@@ -225,7 +224,7 @@ SetupValues:	dc.w $8000		; VDP register start number
 		dc.w 0			; VDP $95/96 - DMA source
 		dc.b $80		; VDP $97 - DMA fill VRAM
 		dc.l $40000080		; VRAM address 0
-
+; RobiWanKenobi: this is Z80 code, hence this being a blob of hex
 		dc.b $AF		; xor a
 		dc.b $01, $D9, $1F	; ld bc,1fd9h
 		dc.b $11, $27, $00	; ld de,0027h
@@ -282,7 +281,7 @@ CheckSumCheck:
 ; 	bne.w	CheckSumError	; if they don't match, branch
 
 	CheckSumOk:
-		lea	($FFFFFE00).w,a6
+		lea	(v_systemstack).w,a6
 		moveq	#0,d7
 		move.w	#$7F,d6
 	@clearRAM:
@@ -295,17 +294,23 @@ CheckSumCheck:
 		move.l	#'init',(v_init).w ; set flag so checksum won't run again
 
 GameInit:
-		lea	($FF0000).l,a6
+		lea	(v_256x256).l,a6
 		moveq	#0,d7
 		move.w	#$3F7F,d6
 	@clearRAM:
 		move.l	d7,(a6)+
-		dbf	d6,@clearRAM	; clear RAM ($0000-$FDFF)
+		dbf	d6,@clearRAM ; clear RAM ($0000-$FDFF)
 
 		bsr.w	VDPSetupGame
-		bsr.w	SoundDriverLoad
 		bsr.w	JoypadInit
 		move.b	#id_Sega,(v_gamemode).w ; set Game Mode to Sega Screen
+		jsr     MegaPCM_LoadDriver
+        lea     SampleTable, a0
+        jsr     MegaPCM_LoadSampleTable
+		tst.w   d0 ; was sample table loaded successfully?
+		beq.s   @SampleTableOk ; if yes, branch
+		illegal
+@SampleTableOk:
 
 MainGameLoop:
 		move.b	(v_gamemode).w,d0 ; load Game Mode
@@ -330,94 +335,85 @@ ptr_GM_Credits:	bra.w	GM_Credits	; Credits ($1C)
 
 		rts
 ; ===========================================================================
-
-CheckSumError:
-		bsr.w	VDPSetupGame
-		move.l	#$C0000000,(vdp_control_port).l ; set VDP to CRAM write
-		moveq	#$3F,d7
-
-	@fillred:
-		move.w	#cRed,(vdp_data_port).l ; fill palette with red
-		dbf	d7,@fillred	; repeat $3F more times
-
-	@endlessloop:
-		bra.s	@endlessloop
+; Sonic 1 Error Handler Code: Gets The Address, Insturction, and Stack pointer
+; and displays it so developers can debug their code.
+; v_errortype tells the handler what text to show
 ; ===========================================================================
-
-BusError:
+BusError: ; Hardware Error, CPU cannot physically address this; shouldn't show up
 		move.b	#2,(v_errortype).w
-		bra.s	loc_43A
+		bra.s	GetAddressValue	;Error comes from an address
 
-AddressError:
+AddressError: ; Hardware Error, Address is odd, and not even; and the CPU cannot access it
 		move.b	#4,(v_errortype).w
-		bra.s	loc_43A
+		bra.s	GetAddressValue	;Error comes from an address
 
-IllegalInstr:
+IllegalInstr: ;Instruction is Unrecognized, these are functions that aren't guarenteed to exist (but the ROM still compiles with them)
 		move.b	#6,(v_errortype).w
-		addq.l	#2,2(sp)
-		bra.s	loc_462
+		addq.l	#2,2(sp) ;Help us get to the instruction by adding to the stack pointer
+		bra.s	GetInsturctionValue ;Error comes from an instruction
 
-ZeroDivide:
+ZeroDivide: ; Pretty simple, we've managed to divide by 0 somehow, which doesn't result in anything except this error
 		move.b	#8,(v_errortype).w
-		bra.s	loc_462
+		bra.s	GetInsturctionValue ;Error comes from an instruction
 
-ChkInstr:
+ChkInstr: ; Out of bounds insturction resulted from a check
 		move.b	#$A,(v_errortype).w
-		bra.s	loc_462
+		bra.s	GetInsturctionValue ;Error comes from an instruction
 
-TrapvInstr:
+TrapvInstr: ; Insturction is overflowing
 		move.b	#$C,(v_errortype).w
-		bra.s	loc_462
+		bra.s	GetInsturctionValue ;Error comes from an instruction
 
-PrivilegeViol:
+PrivilegeViol: ;We are using a insturction that we aren't allowed to use (kind of like using sudo without beign a sudoer)
 		move.b	#$E,(v_errortype).w
-		bra.s	loc_462
+		bra.s	GetInsturctionValue ;Error comes from an instruction
 
-Trace:
+Trace: ;We're in trace mode, this shouldn't ever show up
 		move.b	#$10,(v_errortype).w
-		bra.s	loc_462
+		bra.s	GetInsturctionValue ;Error comes from an instruction
 
-Line1010Emu:
+Line1010Emu: ;Unimplemented Instruction, usually for floating point errors
 		move.b	#$12,(v_errortype).w
-		addq.l	#2,2(sp)
-		bra.s	loc_462
+		addq.l	#2,2(sp) ;Help us get to the instruction by adding to the stack pointer
+		bra.s	GetInsturctionValue ;Error comes from an instruction
 
-Line1111Emu:
+Line1111Emu: ;Unimplemented Instruction, more floating point stuff
 		move.b	#$14,(v_errortype).w
-		addq.l	#2,2(sp)
-		bra.s	loc_462
+		addq.l	#2,2(sp) ;Help us get to the instruction by adding to the stack pointer
+		bra.s	GetInsturctionValue ;Error comes from an instruction
 
-ErrorExcept:
+ErrorExcept: ;Exception, this prevents a real error from happening, and returns an exception; kind of like try and except in python
 		move.b	#0,(v_errortype).w
-		bra.s	loc_462
+		bra.s	GetInsturctionValue ;Error comes from an instruction
 ; ===========================================================================
-
-loc_43A:
-		disable_ints
-		addq.w	#2,sp
-		move.l	(sp)+,(v_spbuffer).w
-		addq.w	#2,sp
-		movem.l	d0-a7,(v_regbuffer).w
-		bsr.w	ShowErrorMessage
-		move.l	2(sp),d0
-		bsr.w	ShowErrorValue
-		move.l	(v_spbuffer).w,d0
-		bsr.w	ShowErrorValue
-		bra.s	loc_478
+;loc_43A:
+GetAddressValue:
+		disable_ints ;disable interrupts
+		addq.w	#2,sp ;add 2 to the stack pointer to get us the buffer values
+		move.l	(sp)+,(v_spbuffer).w ; Save the stack pointer (addresses; hence why it isn;t in GetInsturctionValue)
+		addq.w	#2,sp ; add 2 to the stack pointer to get us the register values
+		movem.l	d0-a7,(v_regbuffer).w ;store the registers as they were when the crash happened
+		bsr.w	ShowErrorMessage ; show what type of error we have
+		move.l	2(sp),d0 ;move the stack pointer information we've collected to d0
+		bsr.w	ShowErrorValue ;show the address
+		move.l	(v_spbuffer).w,d0 ; store the stack pointer buffer to d0 so we can show it
+		bsr.w	ShowErrorValue ;show the stack pointer information that will help us debug the error
+		bra.s	TryErrorAdvance ; Attempt to get past the error when C is pressed
 ; ===========================================================================
-
-loc_462:
-		disable_ints
-		movem.l	d0-a7,(v_regbuffer).w
+;loc_462:
+GetInsturctionValue:
+		disable_ints ;disable interrupts
+		movem.l	d0-a7,(v_regbuffer).w ; store the current instruction that caused the crash
 		bsr.w	ShowErrorMessage
-		move.l	2(sp),d0
-		bsr.w	ShowErrorValue
+		move.l	2(sp),d0 ;move the stack pointer information we've collected to d0
+		bsr.w	ShowErrorValue	;show us the insturction  in hex format
+;loc_478:
+TryErrorAdvance:
+		bsr.w	ErrorWaitForC	;Wait for the player to push C to do anything
+		movem.l	(v_regbuffer).w,d0-a7 ;restore the RAM to the game and attempt to bypass the error
+		enable_ints	;reenable intterupts to continue playing
+		rte	;Return to exception (continue the game code)
 
-loc_478:
-		bsr.w	ErrorWaitForC
-		movem.l	(v_regbuffer).w,d0-a7
-		enable_ints
-		rte
 
 ShowErrorMessage:
 		lea	(vdp_data_port).l,a6
@@ -497,7 +493,7 @@ ErrorWaitForC:
 
 ; ===========================================================================
 
-Art_Text:	incbin	"artunc\menutext.bin" ; text used in level select and debug mode
+Art_Text:	incbin	"artunc\menutext.bin" ; text used in level select, the error handler, and debug mode
 		even
 
 ; ===========================================================================
@@ -564,8 +560,8 @@ VBla_00:
 
 	@notPAL:
 		move.w	#1,(f_hbla_pal).w ; set HBlank flag
-		stopZ80
-		waitZ80
+
+
 		tst.b	(f_wtr_state).w	; is water above top of screen?
 		bne.s	@waterabove 	; if yes, branch
 
@@ -577,7 +573,7 @@ VBla_00:
 
 	@waterbelow:
 		move.w	(v_hbla_hreg).w,(a5)
-		startZ80
+
 		bra.w	VBla_Music
 ; ===========================================================================
 
@@ -615,8 +611,8 @@ VBla_10:
 		beq.w	VBla_0A		; if yes, branch
 
 VBla_08:
-		stopZ80
-		waitZ80
+
+
 		bsr.w	ReadJoypads
 		tst.b	(f_wtr_state).w
 		bne.s	@waterabove
@@ -639,14 +635,14 @@ VBla_08:
 		move.b	#0,(f_sonframechg).w
 
 	@nochg:
-		startZ80
+
 		movem.l	(v_screenposx).w,d0-d7
 		movem.l	d0-d7,(v_screenposx_dup).w
 		movem.l	(v_fg_scroll_flags).w,d0-d1
 		movem.l	d0-d1,(v_fg_scroll_flags_dup).w
 		cmpi.b	#96,(v_hbla_line).w
 		bhs.s	Demo_Time
-		move.b	#1,($FFFFF64F).w
+		move.b	#1,(f_doupdatesinhblank).w
 		addq.l	#4,sp
 		bra.w	VBla_Exit
 
@@ -670,13 +666,13 @@ Demo_Time:
 ; ===========================================================================
 
 VBla_0A:
-		stopZ80
-		waitZ80
+
+
 		bsr.w	ReadJoypads
 		writeCRAM	v_pal_dry,$80,0
 		writeVRAM	v_spritetablebuffer,$280,vram_sprites
 		writeVRAM	v_hscrolltablebuffer,$380,vram_hscroll
-		startZ80
+
 		bsr.w	PalCycle_SS
 		tst.b	(f_sonframechg).w ; has Sonic's sprite changed?
 		beq.s	@nochg		; if not, branch
@@ -694,8 +690,8 @@ VBla_0A:
 ; ===========================================================================
 
 VBla_0C:
-		stopZ80
-		waitZ80
+
+
 		bsr.w	ReadJoypads
 		tst.b	(f_wtr_state).w
 		bne.s	@waterabove
@@ -716,7 +712,7 @@ VBla_0C:
 		move.b	#0,(f_sonframechg).w
 
 	@nochg:
-		startZ80
+
 		movem.l	(v_screenposx).w,d0-d7
 		movem.l	d0-d7,(v_screenposx_dup).w
 		movem.l	(v_fg_scroll_flags).w,d0-d1
@@ -730,7 +726,7 @@ VBla_0C:
 
 VBla_0E:
 		bsr.w	sub_106E
-		addq.b	#1,($FFFFF628).w
+		addq.b	#1,(v_vbla_0e_counter).w
 		move.b	#$E,(v_vbla_routine).w
 		rts
 ; ===========================================================================
@@ -742,13 +738,13 @@ VBla_12:
 ; ===========================================================================
 
 VBla_16:
-		stopZ80
-		waitZ80
+
+
 		bsr.w	ReadJoypads
 		writeCRAM	v_pal_dry,$80,0
 		writeVRAM	v_spritetablebuffer,$280,vram_sprites
 		writeVRAM	v_hscrolltablebuffer,$380,vram_hscroll
-		startZ80
+
 		tst.b	(f_sonframechg).w
 		beq.s	@nochg
 		writeVRAM	v_sgfx_buffer,$2E0,vram_sonic
@@ -763,8 +759,8 @@ VBla_16:
 		rts
 
 sub_106E:
-		stopZ80
-		waitZ80
+
+
 		bsr.w	ReadJoypads
 		tst.b	(f_wtr_state).w ; is water above top of screen?
 		bne.s	@waterabove	; if yes, branch
@@ -777,7 +773,7 @@ sub_106E:
 	@waterbelow:
 		writeVRAM	v_spritetablebuffer,$280,vram_sprites
 		writeVRAM	v_hscrolltablebuffer,$380,vram_hscroll
-		startZ80
+
 		rts
 ; End of function sub_106E
 
@@ -828,7 +824,7 @@ HBlank:
 		move.l	(a0)+,(a1)
 		move.w	#$8A00+223,4(a1) ; reset HBlank register
 		movem.l	(sp)+,a0-a1
-		tst.b	($FFFFF64F).w
+		tst.b	(f_doupdatesinhblank).w
 		bne.s	loc_119E
 
 	@nochg:
@@ -836,7 +832,7 @@ HBlank:
 ; ===========================================================================
 
 loc_119E:
-		clr.b	($FFFFF64F).w
+		clr.b	(f_doupdatesinhblank).w
 		movem.l	d0-a6,-(sp)
 		bsr.w	Demo_Time
 		jsr	(UpdateMusic).l
@@ -849,25 +845,24 @@ loc_119E:
 ; ---------------------------------------------------------------------------
 
 JoypadInit:
-		stopZ80
-		waitZ80
 		moveq	#$40,d0
-		move.b	d0,($A10009).l	; init port 1 (joypad 1)
-		move.b	d0,($A1000B).l	; init port 2 (joypad 2)
-		move.b	d0,($A1000D).l	; init port 3 (expansion/extra)
-		startZ80
+		move.b	d0,(z80_port_1_control+1).l	; init port 1 (joypad 1)
+		move.b	d0,(z80_port_2_control+1).l	; init port 2 (joypad 2)
+		move.b	d0,(z80_expansion_control+1).l	; init port 3 (expansion/extra)
 		rts
 ; End of function JoypadInit
 
 ; ---------------------------------------------------------------------------
-; Subroutine to read joypad input, and send it to the RAM
+; Subroutine to	read joypad input, and send it to the RAM
 ; ---------------------------------------------------------------------------
+; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
+
 
 ReadJoypads:
 		lea	(v_jpadhold1).w,a0 ; address where joypad states are written
-		lea	($A10003).l,a1	; first joypad port
+		lea	(z80_port_1_data+1).l,a1	; first	joypad port
 		bsr.s	@read		; do the first joypad
-		addq.w	#2,a1		; do the second joypad
+		addq.w	#2,a1		; do the second	joypad
 
 	@read:
 		move.b	#0,(a1)
@@ -989,28 +984,6 @@ ClearScreen:
 		dbf	d1,@clearhscroll ; clear hscroll table (in RAM)
 		rts
 ; End of function ClearScreen
-
-; ---------------------------------------------------------------------------
-; Subroutine to load the sound driver
-; ---------------------------------------------------------------------------
-
-SoundDriverLoad:
-		nop
-		stopZ80
-		resetZ80
-		lea	(Kos_Z80).l,a0	; load sound driver
-		lea	(z80_ram).l,a1	; target Z80 RAM
-		bsr.w	KosDec		; decompress
-		resetZ80a
-		nop
-		nop
-		nop
-		nop
-		resetZ80
-		startZ80
-		rts
-; End of function SoundDriverLoad
-
 ; ---------------------------------------------------------------------------
 ; Subroutine to play a music track
 
@@ -1440,11 +1413,11 @@ loc_160E:
 		moveq	#0,d0
 		move.l	a0,(v_plc_buffer).w
 		move.l	a3,(v_ptrnemcode).w
-		move.l	d0,($FFFFF6E4).w
-		move.l	d0,($FFFFF6E8).w
-		move.l	d0,($FFFFF6EC).w
-		move.l	d5,($FFFFF6F0).w
-		move.l	d6,($FFFFF6F4).w
+		move.l	d0,(v_plc_repeatcount).w
+		move.l	d0,(v_plc_paletteindex).w
+		move.l	d0,(v_plc_previousrow).w
+		move.l	d5,(v_plc_dataword).w
+		move.l	d6,(v_plc_shiftvalue).w
 
 Rplc_Exit:
 		rts
@@ -1453,10 +1426,10 @@ Rplc_Exit:
 sub_1642:
 		tst.w	(f_plc_execute).w
 		beq.w	locret_16DA
-		move.w	#9,($FFFFF6FA).w
+		move.w	#9,(v_plc_framepatternsleft).w
 		moveq	#0,d0
-		move.w	($FFFFF684).w,d0
-		addi.w	#$120,($FFFFF684).w
+		move.w	(v_plc_buffer+4).w,d0
+		addi.w	#$120,(v_plc_buffer+4).w
 		bra.s	loc_1676
 ; End of function sub_1642
 
@@ -1464,10 +1437,10 @@ sub_1642:
 ProcessDPLC2:
 		tst.w	(f_plc_execute).w
 		beq.s	locret_16DA
-		move.w	#3,($FFFFF6FA).w
+		move.w	#3,(v_plc_framepatternsleft).w
 		moveq	#0,d0
-		move.w	($FFFFF684).w,d0
-		addi.w	#$60,($FFFFF684).w
+		move.w	(v_plc_buffer+4).w,d0
+		addi.w	#$60,(v_plc_buffer+4).w
 
 loc_1676:
 		lea	(vdp_control_port).l,a4
@@ -1479,11 +1452,11 @@ loc_1676:
 		subq.w	#4,a4
 		movea.l	(v_plc_buffer).w,a0
 		movea.l	(v_ptrnemcode).w,a3
-		move.l	($FFFFF6E4).w,d0
-		move.l	($FFFFF6E8).w,d1
-		move.l	($FFFFF6EC).w,d2
-		move.l	($FFFFF6F0).w,d5
-		move.l	($FFFFF6F4).w,d6
+		move.l	(v_plc_repeatcount).w,d0
+		move.l	(v_plc_paletteindex).w,d1
+		move.l	(v_plc_previousrow).w,d2
+		move.l	(v_plc_dataword).w,d5
+		move.l	(v_plc_shiftvalue).w,d6
 		lea	(v_ngfx_buffer).w,a1
 
 loc_16AA:
@@ -1491,15 +1464,15 @@ loc_16AA:
 		bsr.w	NemPCD_NewRow
 		subq.w	#1,(f_plc_execute).w
 		beq.s	loc_16DC
-		subq.w	#1,($FFFFF6FA).w
+		subq.w	#1,(v_plc_framepatternsleft).w
 		bne.s	loc_16AA
 		move.l	a0,(v_plc_buffer).w
 		move.l	a3,(v_ptrnemcode).w
-		move.l	d0,($FFFFF6E4).w
-		move.l	d1,($FFFFF6E8).w
-		move.l	d2,($FFFFF6EC).w
-		move.l	d5,($FFFFF6F0).w
-		move.l	d6,($FFFFF6F4).w
+		move.l	d0,(v_plc_repeatcount).w
+		move.l	d1,(v_plc_paletteindex).w
+		move.l	d2,(v_plc_previousrow).w
+		move.l	d5,(v_plc_dataword).w
+		move.l	d6,(v_plc_shiftvalue).w
 
 locret_16DA:
 		rts
@@ -2948,17 +2921,17 @@ GM_Sega:
 		locVRAM	0
 		lea	(Nem_SegaLogo).l,a0 ; load Sega logo patterns
 		bsr.w	NemDec
-		lea	($FF0000).l,a1
+		lea	(v_256x256).l,a1
 		lea	(Eni_SegaLogo).l,a0 ; load Sega logo mappings
 		move.w	#0,d0
 		bsr.w	EniDec
 
-		copyTilemap	$FF0000,$E510,$17,7
-		copyTilemap	$FF0180,$C000,$27,$1B
+		copyTilemap	v_256x256,$E510,$17,7
+		copyTilemap	(v_256x256+$180),$C000,$27,$1B
 
 		tst.b   (v_megadrive).w	; is console Japanese?
 		bmi.s   @loadpal
-		copyTilemap	$FF0A40,$C53A,2,1 ; hide "TM" with a white rectangle
+		copyTilemap	(v_256x256+$A40),$C53A,2,1 ; hide "TM" with a white rectangle
 
 	@loadpal:
 		moveq	#palid_SegaBG,d0
@@ -2981,7 +2954,8 @@ Sega_WaitPal:
 		bsr.w	PlaySound_Special	; play "SEGA" sound
 		move.b	#$14,(v_vbla_routine).w
 		bsr.w	WaitForVBla
-		move.w	#$1E,(v_demolength).w
+		move.w  #$1E+2*60,(v_demolength).w
+
 
 Sega_WaitEnd:
 		move.b	#2,(v_vbla_routine).w
@@ -3007,7 +2981,6 @@ GM_Title:
 		bsr.w	ClearPLC
 		bsr.w	PaletteFadeOut
 		disable_ints
-		bsr.w	SoundDriverLoad
 		lea	(vdp_control_port).l,a6
 		move.w	#$8004,(a6)	; 8-colour mode
 		move.w	#$8200+(vram_fg>>10),(a6) ; set foreground nametable address
@@ -3033,12 +3006,12 @@ GM_Title:
 		locVRAM	$14C0
 		lea	(Nem_CreditText).l,a0 ; load alphabet
 		bsr.w	NemDec
-		lea	($FF0000).l,a1
+		lea	(v_256x256).l,a1
 		lea	(Eni_JapNames).l,a0 ; load mappings for Japanese credits
 		move.w	#0,d0
 		bsr.w	EniDec
 
-		copyTilemap	$FF0000,$C000,$27,$1B
+		copyTilemap	v_256x256,$C000,$27,$1B
 
 		lea	(v_pal_dry_dup).w,a1
 		moveq	#cBlack,d0
@@ -3098,12 +3071,12 @@ GM_Title:
 		lea	(v_lvllayout+$40).w,a4
 		move.w	#$6000,d2
 		bsr.w	DrawChunks
-		lea	($FF0000).l,a1
+		lea	(v_256x256).l,a1
 		lea	(Eni_Title).l,a0 ; load title screen mappings
 		move.w	#0,d0
 		bsr.w	EniDec
 
-		copyTilemap	$FF0000,$C206,$21,$15
+		copyTilemap	v_256x256,$C206,$21,$15
 
 		locVRAM	0
 		lea	(Nem_GHZ_1st).l,a0 ; load GHZ patterns
@@ -3651,7 +3624,7 @@ Level_ClrRam:
 		move.l	d0,(a1)+
 		dbf	d1,Level_ClrObjRam ; clear object RAM
 
-		lea	($FFFFF628).w,a1
+		lea	(v_vbla_0e_counter).w,a1
 		moveq	#0,d0
 		move.w	#$15,d1
 
@@ -3720,7 +3693,7 @@ Level_LoadPal:
 		bsr.w	PalLoad3_Water	; load underwater palette
 		tst.b	(v_lastlamp).w
 		beq.s	Level_GetBgm
-		move.b	($FFFFFE53).w,(f_wtr_state).w
+		move.b	(v_lamp_wtrstat).w,(f_wtr_state).w
 
 Level_GetBgm:
 		tst.w	(f_demo).w
@@ -4474,10 +4447,7 @@ DemoEndDataPtr:	dc.l Demo_EndGHZ1	; demos run during the credits
 		dc.l Demo_EndSBZ1
 		dc.l Demo_EndSBZ2
 		dc.l Demo_EndGHZ2
-
-		dc.b 0,	$8B, 8,	$37, 0,	$42, 8,	$5C, 0,	$6A, 8,	$5F, 0,	$2F, 8,	$2C
-		dc.b 0,	$21, 8,	3, $28,	$30, 8,	8, 0, $2E, 8, $15, 0, $F, 8, $46
-		dc.b 0,	$1A, 8,	$FF, 8,	$CA, 0,	0, 0, 0, 0, 0, 0, 0, 0,	0
+Demo_Unused:	incbin	"demodata\Intro - Unused.bin"
 		even
 
 ; ---------------------------------------------------------------------------
@@ -4898,7 +4868,7 @@ SS_ToLevel:	cmpi.b	#id_Level,(v_gamemode).w
 ; ---------------------------------------------------------------------------
 
 SS_BGLoad:
-		lea	($FF0000).l,a1
+		lea	(v_256x256).l,a1
 		lea	(Eni_SSBg1).l,a0 ; load mappings for the birds and fish
 		move.w	#$4051,d0
 		bsr.w	EniDec
@@ -4923,7 +4893,7 @@ loc_48CE:
 		bne.s	loc_48E2
 		cmpi.w	#6,d7
 		bne.s	loc_48F2
-		lea	($FF0000).l,a1
+		lea	(v_256x256).l,a1
 
 loc_48E2:
 		movem.l	d0-d4,-(sp)
@@ -4947,12 +4917,12 @@ loc_48F2:
 loc_491C:
 		adda.w	#$80,a2
 		dbf	d7,loc_48BE
-		lea	($FF0000).l,a1
+		lea	(v_256x256).l,a1
 		lea	(Eni_SSBg2).l,a0 ; load mappings for the clouds
 		move.w	#$4000,d0
 		bsr.w	EniDec
-		copyTilemap	$FF0000,$C000,$3F,$1F
-		copyTilemap	$FF0000,$D000,$3F,$3F
+		copyTilemap	v_256x256,$C000,$3F,$1F
+		copyTilemap	v_256x256,$D000,$3F,$3F
 		rts
 ; End of function SS_BGLoad
 
@@ -5458,7 +5428,7 @@ GM_Ending:
 		move.l	d0,(a1)+
 		dbf	d1,End_ClrObjRam ; clear object RAM
 
-		lea	($FFFFF628).w,a1
+		lea	(v_vbla_0e_counter).w,a1
 		moveq	#0,d0
 		move.w	#$15,d1
 	End_ClrRam1:
@@ -23518,7 +23488,7 @@ loc_12C7E:
 		bsr.w	Sonic_RecordPosition
 		bsr.w	Sonic_Water
 		move.b	(v_anglebuffer).w,$36(a0)
-		move.b	($FFFFF76A).w,$37(a0)
+		move.b	(v_anglebuffer2).w,$37(a0)
 		tst.b	(f_wtunnelmode).w
 		beq.s	loc_12CA6
 		tst.b	obAnim(a0)
@@ -24519,9 +24489,9 @@ Sonic_Floor:
 		move.w	obVelX(a0),d1
 		move.w	obVelY(a0),d2
 		jsr	(CalcAngle).l
-		move.b	d0,($FFFFFFEC).w
+		move.b	d0,($FFFFFFEC).w ;RobiWanKenobi: these are just called unused in AS
 		subi.b	#$20,d0
-		move.b	d0,($FFFFFFED).w
+		move.b	d0,($FFFFFFED).w ; RobiWanKenobi: these really don't do anything
 		andi.b	#$C0,d0
 		move.b	d0,($FFFFFFEE).w
 		cmpi.b	#$40,d0
@@ -25736,14 +25706,14 @@ Sonic_AnglePos:
 		beq.s	loc_14602
 		moveq	#0,d0
 		move.b	d0,($FFFFF768).w
-		move.b	d0,($FFFFF76A).w
+		move.b	d0,(v_anglebuffer2).w
 		rts
 ; ===========================================================================
 
 loc_14602:
 		moveq	#3,d0
 		move.b	d0,($FFFFF768).w
-		move.b	d0,($FFFFF76A).w
+		move.b	d0,(v_anglebuffer2).w
 		move.b	obAngle(a0),d0
 		addi.b	#$20,d0
 		bpl.s	loc_14624
@@ -25797,7 +25767,7 @@ loc_14630:
 		ext.w	d0
 		neg.w	d0
 		add.w	d0,d3
-		lea	($FFFFF76A).w,a4
+		lea	(v_anglebuffer2).w,a4
 		movea.w	#$10,a3
 		move.w	#0,d6
 		moveq	#$D,d5
@@ -25885,7 +25855,7 @@ locret_1470A:
 ; ---------------------------------------------------------------------------
 
 Sonic_Angle:
-		move.b	($FFFFF76A).w,d2
+		move.b	(v_anglebuffer2).w,d2
 		cmp.w	d0,d1
 		ble.s	loc_1475E
 		move.b	($FFFFF768).w,d2
@@ -25936,7 +25906,7 @@ Sonic_WalkVertR:
 		move.b	obHeight(a0),d0
 		ext.w	d0
 		add.w	d0,d3
-		lea	($FFFFF76A).w,a4
+		lea	(v_anglebuffer2).w,a4
 		movea.w	#$10,a3
 		move.w	#0,d6
 		moveq	#$D,d5
@@ -26003,7 +25973,7 @@ Sonic_WalkCeiling:
 		move.b	obWidth(a0),d0
 		ext.w	d0
 		sub.w	d0,d3
-		lea	($FFFFF76A).w,a4
+		lea	(v_anglebuffer2).w,a4
 		movea.w	#-$10,a3
 		move.w	#$1000,d6
 		moveq	#$D,d5
@@ -26070,7 +26040,7 @@ Sonic_WalkVertL:
 		ext.w	d0
 		sub.w	d0,d3
 		eori.w	#$F,d3
-		lea	($FFFFF76A).w,a4
+		lea	(v_anglebuffer2).w,a4
 		movea.w	#-$10,a3
 		move.w	#$800,d6
 		moveq	#$D,d5
@@ -26601,7 +26571,7 @@ Sonic_WalkSpeed:
 		swap	d2
 		swap	d3
 		move.b	d0,(v_anglebuffer).w
-		move.b	d0,($FFFFF76A).w
+		move.b	d0,(v_anglebuffer2).w
 		move.b	d0,d1
 		addi.b	#$20,d0
 		bpl.s	loc_14D1A
@@ -26640,7 +26610,7 @@ loc_14D3C:
 
 sub_14D48:
 		move.b	d0,(v_anglebuffer).w
-		move.b	d0,($FFFFF76A).w
+		move.b	d0,(v_anglebuffer2).w
 		addi.b	#$20,d0
 		andi.b	#$C0,d0
 		cmpi.b	#$40,d0
@@ -26681,7 +26651,7 @@ Sonic_HitFloor:
 		move.b	obWidth(a0),d0
 		ext.w	d0
 		sub.w	d0,d3
-		lea	($FFFFF76A).w,a4
+		lea	(v_anglebuffer2).w,a4
 		movea.w	#$10,a3
 		move.w	#0,d6
 		moveq	#$D,d5
@@ -26690,7 +26660,7 @@ Sonic_HitFloor:
 		move.b	#0,d2
 
 loc_14DD0:
-		move.b	($FFFFF76A).w,d3
+		move.b	(v_anglebuffer2).w,d3
 		cmp.w	d0,d1
 		ble.s	loc_14DDE
 		move.b	(v_anglebuffer).w,d3
@@ -26792,7 +26762,7 @@ sub_14E50:
 		move.b	obHeight(a0),d0
 		ext.w	d0
 		add.w	d0,d3
-		lea	($FFFFF76A).w,a4
+		lea	(v_anglebuffer2).w,a4
 		movea.w	#$10,a3
 		move.w	#0,d6
 		moveq	#$E,d5
@@ -26874,7 +26844,7 @@ Sonic_DontRunOnWalls:
 		move.b	obWidth(a0),d0
 		ext.w	d0
 		sub.w	d0,d3
-		lea	($FFFFF76A).w,a4
+		lea	(v_anglebuffer2).w,a4
 		movea.w	#-$10,a3
 		move.w	#$1000,d6
 		moveq	#$E,d5
@@ -26950,7 +26920,7 @@ loc_14FD6:
 		ext.w	d0
 		sub.w	d0,d3
 		eori.w	#$F,d3
-		lea	($FFFFF76A).w,a4
+		lea	(v_anglebuffer2).w,a4
 		movea.w	#-$10,a3
 		move.w	#$800,d6
 		moveq	#$E,d5
@@ -34610,7 +34580,7 @@ loc_1B1C0:
 		dbf	d7,loc_1B19E
 
 		move.w	(sp)+,d5
-		lea	($FF0000).l,a0
+		lea	(v_256x256).l,a0
 		moveq	#0,d0
 		move.w	(v_screenposy).w,d0
 		divu.w	#$18,d0
@@ -35046,7 +35016,7 @@ SS_LoadData:
 		lea	($FF4000).l,a1
 		move.w	#0,d0
 		jsr	(EniDec).l
-		lea	($FF0000).l,a1
+		lea	(v_256x256).l,a1
 		move.w	#$FFF,d0
 
 SS_ClrRAM3:
@@ -35595,7 +35565,7 @@ loc_1BCD4:
 ; End of function Obj09_Fall
 
 sub_1BCE8:
-		lea	($FF0000).l,a1
+		lea	(v_256x256).l,a1
 		moveq	#0,d4
 		swap	d2
 		move.w	d2,d4
@@ -35646,7 +35616,7 @@ loc_1BD46:
 ; End of function sub_1BD30
 
 Obj09_ChkItems:
-		lea	($FF0000).l,a1
+		lea	(v_256x256).l,a1
 		moveq	#0,d4
 		move.w	obY(a0),d4
 		addi.w	#$50,d4
@@ -38663,6 +38633,10 @@ ObjPos_Null:	dc.b $FF, $FF, 0, 0, 0,	0
 
 		dcb.b $63C,$FF
 		;dcb.b ($10000-(*%$10000))-(EndOfRom-SoundDriver),$FF
+
+		include "sound\MegaPCM.asm"
+		include "sound\SampleTable.asm"
+
 SoundDriver:	include "sound\s1.sounddriver.asm"
 		even
 
