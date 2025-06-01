@@ -17,7 +17,7 @@ You may now go ahead and call me a heretic. I don't care.
 * Moved _tilemaps_ folder stuff into _misc_ folder
 * Renamed some includes to start with _
 * Moved sound driver to _sound_ folder
-* Renamed sonic.asm to sonic1.asm
+* Renamed _sonic.asm_ to _sonic1.asm_
 
 ### Code Style
 * Collapsed multi-empty lines to a single one each
@@ -30,8 +30,8 @@ You may now go ahead and call me a heretic. I don't care.
 * Enabled a whole bunch of compiler optimizations
 * Removed checksum check and fixheadr.exe
 * Removed padder
-* MegaPCM
-* ASM Music
+* MegaPCM (thanks to RobiWanKenobi)
+* ASM music (thanks to RobiWanKenobi)
 
 ## Warning
 This project is *NOT* anywhere close to being bit-accurate and has zero intentions of being so. The main goal of this project is to provide a nicer out-of-the-box experience without being bombarded with a whole bunch of stuff 99% of people won't ever touch. If you care about bit accuracy, the GitHub community disassembly is right there.
