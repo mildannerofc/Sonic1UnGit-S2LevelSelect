@@ -8,4 +8,6 @@ asm68k /k /m /o ws+ /o op+ /o os+ /o ow+ /o oz+ /o oaq+ /o osq+ /o omq+ /o ae- /
 convsym.exe s1built.debug.sym s1built.debug.bin -a
 
 pause
-start s1built.bin
+if exist s1built.bin (
+	start s1built.bin
+)
