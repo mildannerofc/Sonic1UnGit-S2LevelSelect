@@ -9,3 +9,6 @@ s1built.prev.bin
 .idea
 sound/music/cmp/*.bin
 sound/sfx/cmp/*.bin
+s1built.debug.bin
+*.sym
+*.lst
