@@ -294,7 +294,7 @@ CheckSumCheck:
 		move.l	#'init',(v_init).w ; set flag so checksum won't run again
 
 GameInit:
-		lea	($FF0000).l,a6
+		lea	(v_256x256).l,a6
 		moveq	#0,d7
 		move.w	#$3F7F,d6
 	@clearRAM:
@@ -2921,13 +2921,13 @@ GM_Sega:
 		locVRAM	0
 		lea	(Nem_SegaLogo).l,a0 ; load Sega logo patterns
 		bsr.w	NemDec
-		lea	($FF0000).l,a1
+		lea	(v_256x256).l,a1
 		lea	(Eni_SegaLogo).l,a0 ; load Sega logo mappings
 		move.w	#0,d0
 		bsr.w	EniDec
 
-		copyTilemap	$FF0000,$E510,$17,7
-		copyTilemap	$FF0180,$C000,$27,$1B
+		copyTilemap	v_256x256,$E510,$17,7
+		copyTilemap	(v_256x256+$180),$C000,$27,$1B
 
 		tst.b   (v_megadrive).w	; is console Japanese?
 		bmi.s   @loadpal
@@ -3006,12 +3006,12 @@ GM_Title:
 		locVRAM	$14C0
 		lea	(Nem_CreditText).l,a0 ; load alphabet
 		bsr.w	NemDec
-		lea	($FF0000).l,a1
+		lea	(v_256x256).l,a1
 		lea	(Eni_JapNames).l,a0 ; load mappings for Japanese credits
 		move.w	#0,d0
 		bsr.w	EniDec
 
-		copyTilemap	$FF0000,$C000,$27,$1B
+		copyTilemap	v_256x256,$C000,$27,$1B
 
 		lea	(v_pal_dry_dup).w,a1
 		moveq	#cBlack,d0
@@ -3071,12 +3071,12 @@ GM_Title:
 		lea	(v_lvllayout+$40).w,a4
 		move.w	#$6000,d2
 		bsr.w	DrawChunks
-		lea	($FF0000).l,a1
+		lea	(v_256x256).l,a1
 		lea	(Eni_Title).l,a0 ; load title screen mappings
 		move.w	#0,d0
 		bsr.w	EniDec
 
-		copyTilemap	$FF0000,$C206,$21,$15
+		copyTilemap	v_256x256,$C206,$21,$15
 
 		locVRAM	0
 		lea	(Nem_GHZ_1st).l,a0 ; load GHZ patterns
@@ -4871,7 +4871,7 @@ SS_ToLevel:	cmpi.b	#id_Level,(v_gamemode).w
 ; ---------------------------------------------------------------------------
 
 SS_BGLoad:
-		lea	($FF0000).l,a1
+		lea	(v_256x256).l,a1
 		lea	(Eni_SSBg1).l,a0 ; load mappings for the birds and fish
 		move.w	#$4051,d0
 		bsr.w	EniDec
@@ -4896,7 +4896,7 @@ loc_48CE:
 		bne.s	loc_48E2
 		cmpi.w	#6,d7
 		bne.s	loc_48F2
-		lea	($FF0000).l,a1
+		lea	(v_256x256).l,a1
 
 loc_48E2:
 		movem.l	d0-d4,-(sp)
@@ -4920,12 +4920,12 @@ loc_48F2:
 loc_491C:
 		adda.w	#$80,a2
 		dbf	d7,loc_48BE
-		lea	($FF0000).l,a1
+		lea	(v_256x256).l,a1
 		lea	(Eni_SSBg2).l,a0 ; load mappings for the clouds
 		move.w	#$4000,d0
 		bsr.w	EniDec
-		copyTilemap	$FF0000,$C000,$3F,$1F
-		copyTilemap	$FF0000,$D000,$3F,$3F
+		copyTilemap	v_256x256,$C000,$3F,$1F
+		copyTilemap	v_256x256,$D000,$3F,$3F
 		rts
 ; End of function SS_BGLoad
 
@@ -34583,7 +34583,7 @@ loc_1B1C0:
 		dbf	d7,loc_1B19E
 
 		move.w	(sp)+,d5
-		lea	($FF0000).l,a0
+		lea	(v_256x256).l,a0
 		moveq	#0,d0
 		move.w	(v_screenposy).w,d0
 		divu.w	#$18,d0
@@ -35019,7 +35019,7 @@ SS_LoadData:
 		lea	($FF4000).l,a1
 		move.w	#0,d0
 		jsr	(EniDec).l
-		lea	($FF0000).l,a1
+		lea	(v_256x256).l,a1
 		move.w	#$FFF,d0
 
 SS_ClrRAM3:
@@ -35568,7 +35568,7 @@ loc_1BCD4:
 ; End of function Obj09_Fall
 
 sub_1BCE8:
-		lea	($FF0000).l,a1
+		lea	(v_256x256).l,a1
 		moveq	#0,d4
 		swap	d2
 		move.w	d2,d4
@@ -35619,7 +35619,7 @@ loc_1BD46:
 ; End of function sub_1BD30
 
 Obj09_ChkItems:
-		lea	($FF0000).l,a1
+		lea	(v_256x256).l,a1
 		moveq	#0,d4
 		move.w	obY(a0),d4
 		addi.w	#$50,d4
