@@ -352,6 +352,7 @@ Art_Text:	incbin	"artunc\menutext.bin" ; text used in level select, the error ha
 ; Vertical interrupt
 ; ---------------------------------------------------------------------------
 
+; loc_B10:
 VBlank:
 		movem.l	d0-a6,-(sp)
 		tst.b	(v_vbla_routine).w
@@ -632,9 +633,10 @@ sub_106E:
 ; Horizontal interrupt
 ; ---------------------------------------------------------------------------
 
+; PalToCRAM: <-- horrible misnomer btw
 HBlank:
 		disable_ints
-		tst.w	(f_hbla_pal).w	; is palette set to change?
+		tst.w	(f_hbla_pal).w	; is palette set to change? (used for LZ water)
 		beq.s	@nochg		; if not, branch
 		move.w	#0,(f_hbla_pal).w
 		movem.l	a0-a1,-(sp)
@@ -706,8 +708,6 @@ JoypadInit:
 ; ---------------------------------------------------------------------------
 ; Subroutine to	read joypad input, and send it to the RAM
 ; ---------------------------------------------------------------------------
-; ||||||||||||||| S U B	R O U T	I N E |||||||||||||||||||||||||||||||||||||||
-
 
 ReadJoypads:
 		lea	(v_jpadhold1).w,a0 ; address where joypad states are written
@@ -945,16 +945,12 @@ TilemapToVRAM:
 ; For format explanation see http://info.sonicretro.org/Nemesis_compression
 ; ---------------------------------------------------------------------------
 
-; ||||||||||||||| S U B R O U T I N E |||||||||||||||||||||||||||||||||||||||
-
 ; Nemesis decompression to VRAM
 NemDec:
 		movem.l	d0-a1/a3-a5,-(sp)
 		lea	(NemPCD_WriteRowToVDP).l,a3	; write all data to the same location
 		lea	(vdp_data_port).l,a4	; specifically, to the VDP data port
 		bra.s	NemDecMain
-
-; ||||||||||||||| S U B R O U T I N E |||||||||||||||||||||||||||||||||||||||
 
 ; Nemesis decompression subroutine, decompresses art to RAM
 ; Inputs:
@@ -1241,6 +1237,7 @@ ClearPLC:
 ; Subroutine to use graphics listed in a pattern load cue
 ; ---------------------------------------------------------------------------
 
+; RunPLC_RAM:
 RunPLC:
 		tst.l	(v_plc_buffer).w
 		beq.s	Rplc_Exit
@@ -1506,8 +1503,6 @@ EniDec_Done:
 ; Fetches an inline copy value and stores it in d1
 ; ---------------------------------------------------------------------------
 
-; =============== S U B R O U T I N E =======================================
-
 ; loc_17DC:
 EniDec_FetchInlineValue:
 		move.w	a3,d3		; copy starting art tile
@@ -1724,33 +1719,34 @@ Kos_Done:
 ; Palette cycling routine loading subroutine
 ; ---------------------------------------------------------------------------
 
+; PalCycle_Load:
 PaletteCycle:
 		moveq	#0,d2
 		moveq	#0,d0
 		move.b	(v_zone).w,d0	; get level number
 		add.w	d0,d0
-		move.w	PCycle_Index(pc,d0.w),d0
-		jmp	PCycle_Index(pc,d0.w) ; jump to relevant palette routine
+		move.w	PalCycle_Index(pc,d0.w),d0
+		jmp	PalCycle_Index(pc,d0.w) ; jump to relevant palette routine
 ; End of function PaletteCycle
 
 ; ===========================================================================
 ; ---------------------------------------------------------------------------
 ; Palette cycling routines
 ; ---------------------------------------------------------------------------
-PCycle_Index:	dc.w PCycle_GHZ-PCycle_Index
-		dc.w PCycle_LZ-PCycle_Index
-		dc.w PCycle_MZ-PCycle_Index
-		dc.w PalCycle_SLZ-PCycle_Index
-		dc.w PalCycle_SYZ-PCycle_Index
-		dc.w PalCycle_SBZ-PCycle_Index
-		dc.w PCycle_GHZ-PCycle_Index	; Ending
+PalCycle_Index:	dc.w PalCycle_GHZ-PalCycle_Index
+		dc.w PalCycle_LZ-PalCycle_Index
+		dc.w PalCycle_MZ-PalCycle_Index
+		dc.w PalCycle_SLZ-PalCycle_Index
+		dc.w PalCycle_SYZ-PalCycle_Index
+		dc.w PalCycle_SBZ-PalCycle_Index
+		dc.w PalCycle_GHZ-PalCycle_Index	; Ending
 
-PCycle_Title:
+PalCycle_Title:
 		lea	(Pal_TitleCyc).l,a0
 		bra.s	PCycGHZ_Go
 ; ===========================================================================
 
-PCycle_GHZ:
+PalCycle_GHZ:
 		lea	(Pal_GHZCyc).l,a0
 
 PCycGHZ_Go:
@@ -1768,9 +1764,9 @@ PCycGHZ_Go:
 
 PCycGHZ_Skip:
 		rts
-; End of function PCycle_GHZ
+; End of function PalCycle_GHZ
 
-PCycle_LZ:
+PalCycle_LZ:
 ; Waterfalls
 		subq.w	#1,(v_pcyc_time).w ; decrement timer
 		bpl.s	PCycLZ_Skip1	; if time remains, branch
@@ -1833,13 +1829,13 @@ loc_1A0A:
 
 PCycLZ_Skip2:
 		rts
-; End of function PCycle_LZ
+; End of function PalCycle_LZ
 
 ; ===========================================================================
 PCycLZ_Seq:	dc.b 1,	0, 0, 1, 0, 0, 1, 0
 ; ===========================================================================
 
-PCycle_MZ:
+PalCycle_MZ:
 		rts
 
 PalCycle_SLZ:
@@ -2021,13 +2017,16 @@ Pal_SBZCyc7:	incbin	"palette\Cycle - SBZ 7.bin"
 Pal_SBZCyc8:	incbin	"palette\Cycle - SBZ 8.bin"
 Pal_SBZCyc9:	incbin	"palette\Cycle - SBZ 9.bin"
 Pal_SBZCyc10:	incbin	"palette\Cycle - SBZ 10.bin"
+
 ; ---------------------------------------------------------------------------
 ; Subroutine to fade in from black
 ; ---------------------------------------------------------------------------
 
+; Pal_FadeTo:
 PaletteFadeIn:
 		move.w	#$003F,(v_pfade_start).w ; set start position = 0; size = $40
 
+; Pal_FadeTo2:
 PalFadeIn_Alt:				; start position and size are already set
 		moveq	#0,d0
 		lea	(v_pal_dry).w,a0
@@ -2051,6 +2050,7 @@ PalFadeIn_Alt:				; start position and size are already set
 		rts
 ; End of function PaletteFadeIn
 
+; Pal_FadeIn:
 FadeIn_FromBlack:
 		moveq	#0,d0
 		lea	(v_pal_dry).w,a0
@@ -2083,6 +2083,7 @@ FadeIn_FromBlack:
 		rts
 ; End of function FadeIn_FromBlack
 
+; Pal_AddColor:
 FadeIn_AddColour:
 @addblue:
 		move.w	(a1)+,d2
@@ -2095,7 +2096,6 @@ FadeIn_AddColour:
 		bhi.s	@addgreen	; if yes, branch
 		move.w	d1,(a0)+	; update palette
 		rts
-; ===========================================================================
 
 @addgreen:
 		move.w	d3,d1
@@ -2104,12 +2104,10 @@ FadeIn_AddColour:
 		bhi.s	@addred
 		move.w	d1,(a0)+	; update palette
 		rts
-; ===========================================================================
 
 @addred:
 		addq.w	#2,(a0)+	; increase red value
 		rts
-; ===========================================================================
 
 @next:
 		addq.w	#2,a0		; next colour
@@ -2120,6 +2118,7 @@ FadeIn_AddColour:
 ; Subroutine to fade out to black
 ; ---------------------------------------------------------------------------
 
+; Pal_FadeFrom:
 PaletteFadeOut:
 		move.w	#$003F,(v_pfade_start).w ; start position = 0; size = $40
 		move.w	#$15,d4
@@ -2133,6 +2132,7 @@ PaletteFadeOut:
 		rts
 ; End of function PaletteFadeOut
 
+; Pal_FadeOut:
 FadeOut_ToBlack:
 		moveq	#0,d0
 		lea	(v_pal_dry).w,a0
@@ -2156,6 +2156,7 @@ FadeOut_ToBlack:
 		rts
 ; End of function FadeOut_ToBlack
 
+; Pal_DecColor:
 FadeOut_DecColour:
 @dered:
 		move.w	(a0),d2
@@ -2165,7 +2166,6 @@ FadeOut_DecColour:
 		beq.s	@degreen
 		subq.w	#2,(a0)+	; decrease red value
 		rts
-; ===========================================================================
 
 @degreen:
 		move.w	d2,d1
@@ -2173,7 +2173,6 @@ FadeOut_DecColour:
 		beq.s	@deblue
 		subi.w	#$20,(a0)+	; decrease green value
 		rts
-; ===========================================================================
 
 @deblue:
 		move.w	d2,d1
@@ -2181,7 +2180,6 @@ FadeOut_DecColour:
 		beq.s	@next
 		subi.w	#$200,(a0)+	; decrease blue value
 		rts
-; ===========================================================================
 
 @next:
 		addq.w	#2,a0
@@ -2192,6 +2190,7 @@ FadeOut_DecColour:
 ; Subroutine to fade in from white (Special Stage)
 ; ---------------------------------------------------------------------------
 
+; Pal_MakeWhite:
 PaletteWhiteIn:
 		move.w	#$003F,(v_pfade_start).w ; start position = 0; size = $40
 		moveq	#0,d0
@@ -2216,6 +2215,7 @@ PaletteWhiteIn:
 		rts
 ; End of function PaletteWhiteIn
 
+; Pal_WhiteToBlack:
 WhiteIn_FromWhite:
 		moveq	#0,d0
 		lea	(v_pal_dry).w,a0
@@ -2247,6 +2247,7 @@ WhiteIn_FromWhite:
 		rts
 ; End of function WhiteIn_FromWhite
 
+; Pal_DecColor2:
 WhiteIn_DecColour:
 @deblue:
 		move.w	(a1)+,d2
@@ -2260,7 +2261,6 @@ WhiteIn_DecColour:
 		blo.s	@degreen
 		move.w	d1,(a0)+
 		rts
-; ===========================================================================
 
 @degreen:
 		move.w	d3,d1
@@ -2270,12 +2270,10 @@ WhiteIn_DecColour:
 		blo.s	@dered
 		move.w	d1,(a0)+
 		rts
-; ===========================================================================
 
 @dered:
 		subq.w	#2,(a0)+	; decrease red value
 		rts
-; ===========================================================================
 
 @next:
 		addq.w	#2,a0
@@ -2286,6 +2284,7 @@ WhiteIn_DecColour:
 ; Subroutine to fade to white (Special Stage)
 ; ---------------------------------------------------------------------------
 
+; Pal_MakeFlash:
 PaletteWhiteOut:
 		move.w	#$003F,(v_pfade_start).w ; start position = 0; size = $40
 		move.w	#$15,d4
@@ -2299,6 +2298,7 @@ PaletteWhiteOut:
 		rts
 ; End of function PaletteWhiteOut
 
+; Pal_ToWhite:
 WhiteOut_ToWhite:
 		moveq	#0,d0
 		lea	(v_pal_dry).w,a0
@@ -2322,6 +2322,7 @@ WhiteOut_ToWhite:
 		rts
 ; End of function WhiteOut_ToWhite
 
+; Pal_AddColor2:
 WhiteOut_AddColour:
 @addred:
 		move.w	(a0),d2
@@ -2333,7 +2334,6 @@ WhiteOut_AddColour:
 		beq.s	@addgreen
 		addq.w	#2,(a0)+	; increase red value
 		rts
-; ===========================================================================
 
 @addgreen:
 		move.w	d2,d1
@@ -2342,7 +2342,6 @@ WhiteOut_AddColour:
 		beq.s	@addblue
 		addi.w	#$20,(a0)+	; increase green value
 		rts
-; ===========================================================================
 
 @addblue:
 		move.w	d2,d1
@@ -2351,7 +2350,6 @@ WhiteOut_AddColour:
 		beq.s	@next
 		addi.w	#$200,(a0)+	; increase blue value
 		rts
-; ===========================================================================
 
 @next:
 		addq.w	#2,a0
@@ -2614,6 +2612,7 @@ Pal_Ending:	incbin	"palette\Ending.bin"
 ; Subroutine to wait for VBlank routines to complete
 ; ---------------------------------------------------------------------------
 
+; DelayProgram:
 WaitForVBla:
 		enable_ints
 
@@ -2750,6 +2749,7 @@ Angle_Data:	incbin	"misc\angles.bin"
 ; Sega screen
 ; ---------------------------------------------------------------------------
 
+; SegaScreen:
 GM_Sega:
 		move.b	#bgm_Stop,d0
 		bsr.w	PlaySound_Special ; stop music
@@ -2968,6 +2968,7 @@ GM_Title:
 		ori.b	#$40,d0
 		move.w	d0,(vdp_control_port).l
 		bsr.w	PaletteFadeIn
+; ---------------------------------------------------------------------------
 
 Tit_MainLoop:
 		move.b	#4,(v_vbla_routine).w
@@ -2975,7 +2976,7 @@ Tit_MainLoop:
 		jsr	(ExecuteObjects).l
 		bsr.w	DeformLayers
 		jsr	(BuildSprites).l
-		bsr.w	PCycle_Title
+		bsr.w	PalCycle_Title
 		bsr.w	RunPLC
 		move.w	(v_objspace+obX).w,d0
 		addq.w	#2,d0
@@ -3201,6 +3202,7 @@ LevSelCode_US:	dc.b btnUp,btnDn,btnL,btnR,0,$FF
 ; Demo mode
 ; ---------------------------------------------------------------------------
 
+; Demo:
 GotoDemo:
 		move.w	#$1E,(v_demolength).w
 
@@ -3434,6 +3436,7 @@ MusicList:
 ; Level
 ; ---------------------------------------------------------------------------
 
+; Level:
 GM_Level:
 		bset	#7,(v_gamemode).w ; add $80 to screen mode (for pre level sequence)
 		tst.w	(f_demo).w
@@ -3785,6 +3788,7 @@ loc_3BC8:
 ; Subroutine to do special water effects in Labyrinth Zone
 ; ---------------------------------------------------------------------------
 
+; LZWaterEffects:
 LZWaterFeatures:
 		cmpi.b	#id_LZ,(v_zone).w ; check if level is LZ
 		bne.s	@notlabyrinth	; if not, branch
@@ -4427,6 +4431,7 @@ OscillateNumDo:
 ; Subroutine to change synchronised animation variables (rings, giant rings)
 ; ---------------------------------------------------------------------------
 
+; ChangeRingFrame:
 SynchroAnimate:
 
 ; Used for GHZ spiked log
@@ -4510,6 +4515,7 @@ Demo_SS:	incbin	"demodata\Intro - Special Stage.bin"
 ; Special Stage
 ; ---------------------------------------------------------------------------
 
+; SpecialStage:
 GM_Special:
 		move.w	#sfx_EnterSS,d0
 		bsr.w	PlaySound_Special ; play special stage entry sound
@@ -4986,6 +4992,7 @@ byte_4CCC:	dc.b 8,	2, 4, $FF, 2, 3, 8, $FF, 4, 2, 2, 3, 8,	$FD, 4,	2, 2, 3, 2, $
 ; Continue screen
 ; ---------------------------------------------------------------------------
 
+; ContinueScreen:
 GM_Continue:
 		bsr.w	PaletteFadeOut
 		disable_ints
@@ -5265,6 +5272,7 @@ Map_ContScr:	include	"_maps\Continue Screen.asm"
 ; Ending sequence in Green Hill Zone
 ; ---------------------------------------------------------------------------
 
+; EndingSequence:
 GM_Ending:
 		move.b	#bgm_Stop,d0
 		bsr.w	PlaySound_Special ; stop music
@@ -5755,6 +5763,7 @@ Map_ESth:	include	"_maps\Ending Sequence STH.asm"
 ; Credits ending sequence
 ; ---------------------------------------------------------------------------
 
+; Credits:
 GM_Credits:
 		bsr.w	ClearPLC
 		bsr.w	PaletteFadeOut
@@ -6457,6 +6466,7 @@ BgScroll_End:
 ; Background layer deformation subroutines
 ; ---------------------------------------------------------------------------
 
+; DeformBgLayer:
 DeformLayers:
 		tst.b	(f_nobgscroll).w
 		beq.s	@bgscroll
@@ -7110,6 +7120,7 @@ ScrollHoriz:
 		rts
 ; End of function ScrollHoriz
 
+; ScrollHoriz2:
 MoveScreenHoriz:
 		move.w	(v_player+obX).w,d0
 		sub.w	(v_screenposx).w,d0 ; Sonic's distance from left edge of screen
@@ -8191,6 +8202,7 @@ locj_72EE:
 ; Subroutine to load basic level data
 ; ---------------------------------------------------------------------------
 
+; MainLoadBlockLoad:
 LevelDataLoad:
 		moveq	#0,d0
 		move.b	(v_zone).w,d0
@@ -8290,6 +8302,7 @@ LevLoad_Row:
 ; Dynamic level events
 ; ---------------------------------------------------------------------------
 
+; DynScrResizeLoad:
 DynamicLevelEvents:
 		moveq	#0,d0
 		move.b	(v_zone).w,d0
@@ -15688,6 +15701,7 @@ Spik_Upright:
 		tst.w	d4
 		bpl.s	Spik_Display
 
+; Obj36_Hurt:
 Spik_Hurt:
 		tst.b	(v_invinc).w	; is Sonic invincible?
 		bne.s	Spik_Display	; if yes, branch
@@ -16007,6 +16021,7 @@ Map_Smash:	include	"_maps\Smashable Walls.asm"
 ; Object code execution subroutine
 ; ---------------------------------------------------------------------------
 
+; ObjectsLoad:
 ExecuteObjects:
 		lea	(v_objspace).w,a0 ; set address for object RAM
 		moveq	#$7F,d7
@@ -16055,9 +16070,6 @@ loc_D37C:
 ; Object pointers
 ; ---------------------------------------------------------------------------
 Obj_Index:
-; ---------------------------------------------------------------------------
-; Object pointers
-; ---------------------------------------------------------------------------
 ptr_SonicPlayer:	dc.l SonicPlayer	; $01
 ptr_Obj02:		dc.l NullObject
 ptr_Obj03:		dc.l NullObject
@@ -16435,6 +16447,7 @@ DisplaySprite1:
 DeleteObject:
 		movea.l	a0,a1		; move object RAM address to (a1)
 
+; DeleteObject2:
 DeleteChild:				; child objects are already in (a1)
 		moveq	#0,d1
 		moveq	#$F,d0
@@ -16728,6 +16741,7 @@ BuildSpr_FlipXY:
 ; d0 = flag set if object is off screen
 ; ---------------------------------------------------------------------------
 
+; ChkObjOnScreen:
 ChkObjectVisible:
 		move.w	obX(a0),d0	; get object x-position
 		sub.w	(v_screenposx).w,d0 ; subtract screen x-position
@@ -16757,6 +16771,7 @@ ChkObjectVisible:
 ; d0 = flag set if object is off screen
 ; ---------------------------------------------------------------------------
 
+; ChkObjOnScreen2:
 ChkPartiallyVisible:
 		moveq	#0,d1
 		move.b	obActWid(a0),d1
@@ -17009,6 +17024,7 @@ locret_DA8A:
 ; a1 = free position in object RAM
 ; ---------------------------------------------------------------------------
 
+; SingleObjLoad:
 FindFreeObj:
 		lea	(v_lvlobjspace).w,a1 ; start address for object RAM
 		move.w	#$5F,d0
@@ -17031,6 +17047,7 @@ FindFreeObj:
 ; a1 = free position in object RAM
 ; ---------------------------------------------------------------------------
 
+; SingleObjLoad2:
 FindNextFreeObj:
 		movea.l	a0,a1
 		move.w	#v_lvlobjend&$FFFF,d0
@@ -18817,6 +18834,7 @@ Moto_Action:	; Routine 2
 ; Subroutine to remember whether an object is destroyed/collected
 ; ---------------------------------------------------------------------------
 
+; MarkObjGone:
 RememberState:
 		out_of_range.w	@offscreen
 		bra.w	DisplaySprite
@@ -18901,7 +18919,11 @@ Map_Moto:	include	"_maps\Moto Bug.asm"
 
 Obj4F:
 		rts
+		
+; ===========================================================================
+; ---------------------------------------------------------------------------
 
+; For some reason, this Yadrin code is placed above the object itself
 Yad_ChkWall:
 		move.w	(v_framecount).w,d0
 		add.w	d7,d0
@@ -18931,7 +18953,6 @@ loc_F836:
 		rts
 ; End of function Yad_ChkWall
 
-; ===========================================================================
 ; ---------------------------------------------------------------------------
 ; Object 50 - Yadrin enemy (SYZ)
 ; ---------------------------------------------------------------------------
@@ -23490,7 +23511,7 @@ Sonic_Water:
 ; Modes for controlling	Sonic
 ; ---------------------------------------------------------------------------
 
-Sonic_MdNormal:
+Sonic_MdNormal:	; on ground and not rolling
 		bsr.w	Sonic_Jump
 		bsr.w	Sonic_SlopeResist
 		bsr.w	Sonic_Move
@@ -23502,7 +23523,7 @@ Sonic_MdNormal:
 		rts
 ; ===========================================================================
 
-Sonic_MdJump:
+Sonic_MdJump:	; airborne but not rolling
 		bsr.w	Sonic_JumpHeight
 		bsr.w	Sonic_JumpDirection
 		bsr.w	Sonic_LevelBound
@@ -23517,7 +23538,7 @@ loc_12E5C:
 		rts
 ; ===========================================================================
 
-Sonic_MdRoll:
+Sonic_MdRoll:	; rolling on ground
 		bsr.w	Sonic_Jump
 		bsr.w	Sonic_RollRepel
 		bsr.w	Sonic_RollSpeed
@@ -23528,7 +23549,7 @@ Sonic_MdRoll:
 		rts
 ; ===========================================================================
 
-Sonic_MdJump2:
+Sonic_MdJump2:	; airborne and rolling (usually from a regular jump)
 		bsr.w	Sonic_JumpHeight
 		bsr.w	Sonic_JumpDirection
 		bsr.w	Sonic_LevelBound
@@ -23941,6 +23962,7 @@ loc_13242:
 ; Subroutine to change Sonic's direction while jumping
 ; ---------------------------------------------------------------------------
 
+; Sonic_ChgJumpDir:
 Sonic_JumpDirection:
 		move.w	(v_sonspeedmax).w,d6
 		move.w	(v_sonspeedacc).w,d5
@@ -24105,6 +24127,7 @@ Sonic_ChkRoll:
 	@ismoving:
 		rts
 ; End of function Sonic_Roll
+
 ; ---------------------------------------------------------------------------
 ; Subroutine allowing Sonic to jump
 ; ---------------------------------------------------------------------------
@@ -24160,6 +24183,7 @@ loc_13490:
 		bset	#4,obStatus(a0)
 		rts
 ; End of function Sonic_Jump
+
 ; ---------------------------------------------------------------------------
 ; Subroutine controlling Sonic's jump height/duration
 ; ---------------------------------------------------------------------------
@@ -24293,6 +24317,7 @@ loc_13582:
 		subq.w	#1,$3E(a0)
 		rts
 ; End of function Sonic_SlopeRepel
+
 ; ---------------------------------------------------------------------------
 ; Subroutine to return Sonic's angle to 0 as he jumps
 ; ---------------------------------------------------------------------------
@@ -24321,6 +24346,7 @@ loc_1359E:
 locret_135A2:
 		rts
 ; End of function Sonic_JumpAngle
+
 ; ---------------------------------------------------------------------------
 ; Subroutine for Sonic to interact with the floor after	jumping/falling
 ; ---------------------------------------------------------------------------
@@ -24552,10 +24578,12 @@ loc_137E4:
 		move.w	#0,(v_itembonus).w
 		rts
 ; End of function Sonic_ResetOnFloor
+
 ; ---------------------------------------------------------------------------
 ; Sonic when he	gets hurt
 ; ---------------------------------------------------------------------------
 
+; Obj01_Hurt:
 Sonic_Hurt:	; Routine 4
 		jsr	(SpeedToPos).l
 		addi.w	#$30,obVelY(a0)
@@ -24599,6 +24627,7 @@ locret_13860:
 ; Sonic when he	dies
 ; ---------------------------------------------------------------------------
 
+; Obj01_Death:
 Sonic_Death:	; Routine 6
 		bsr.w	GameOver
 		jsr	(ObjectFall).l
@@ -24917,10 +24946,12 @@ Sonic_Animate:
 ; End of function Sonic_Animate
 
 		include	"_anim\Sonic.asm"
+
 ; ---------------------------------------------------------------------------
 ; Sonic graphics loading subroutine
 ; ---------------------------------------------------------------------------
 
+; LoadSonicDynPLC:
 Sonic_LoadGfx:
 		moveq	#0,d0
 		move.b	obFrame(a0),d0	; load frame number
@@ -25928,6 +25959,7 @@ loc_14942:
 ;      (refers to a 16x16 tile number)
 ; ---------------------------------------------------------------------------
 
+; Floor_ChkTile:
 FindNearestTile:
 		move.w	d2,d0		; get y-pos. of bottom edge of object
 		lsr.w	#1,d0
@@ -26552,9 +26584,11 @@ locret_14E16:
 ; (a4) = floor angle
 ; ---------------------------------------------------------------------------
 
+; ObjHitFloor:
 ObjFloorDist:
 		move.w	obX(a0),d3
 
+; ObjHitFloor2:
 ObjFloorDist2:
 		move.w	obY(a0),d2
 		moveq	#0,d0
@@ -33975,6 +34009,7 @@ Map_Pri:	include	"_maps\Prison Capsule.asm"
 ; Subroutine to react to obColType(a0)
 ; ---------------------------------------------------------------------------
 
+; TouchResponse:
 ReactToItem:
 		nop
 		move.w	obX(a0),d2	; load Sonic's x-axis position
@@ -34108,6 +34143,7 @@ ReactToItem:
 		rts
 ; ===========================================================================
 
+; Touch_Monitor:
 React_Monitor:
 		tst.w	obVelY(a0)	; is Sonic moving upwards?
 		bpl.s	@movingdown	; if not, branch
@@ -34134,6 +34170,7 @@ React_Monitor:
 		rts
 ; ===========================================================================
 
+; Touch_Enemy:
 React_Enemy:
 		tst.b	(v_invinc).w	; is Sonic invincible?
 		bne.s	@donthurtsonic	; if yes, branch
@@ -34202,6 +34239,7 @@ React_Enemy:
 React_Caterkiller:
 		bset	#7,obStatus(a1)
 
+; Touch_ChkHurt:
 React_ChkHurt:
 		tst.b	(v_invinc).w	; is Sonic invincible?
 		beq.s	@notinvincible	; if not, branch
@@ -34211,6 +34249,7 @@ React_ChkHurt:
 		rts
 ; ===========================================================================
 
+	; Touch_Hurt:
 	@notinvincible:
 		nop
 		tst.w	$30(a0)		; is Sonic flashing?
@@ -34901,10 +34940,10 @@ loc_1B730:
 
 ; ===========================================================================
 
-SS_MapIndex:
 ; ---------------------------------------------------------------------------
 ; Special stage mappings and VRAM pointers
 ; ---------------------------------------------------------------------------
+SS_MapIndex:
 	dc.l Map_SSWalls	; address of mappings
 	dc.w $142		; VRAM setting
 	dc.l Map_SSWalls
@@ -35748,6 +35787,7 @@ Obj10:
 ; Subroutine to animate	level graphics
 ; ---------------------------------------------------------------------------
 
+; AniArt_Load:
 AnimateLevelGfx:
 		tst.w	(f_pause).w	; is the game paused?
 		bne.s	@ispaused	; if yes, branch
@@ -36405,6 +36445,7 @@ AddPoints:
 ; Subroutine to update the HUD
 ; ---------------------------------------------------------------------------
 
+; HudUpdate:
 HUD_Update:
 		tst.w	(f_debugmode).w	; is debug mode on?
 		bne.w	HudDebug	; if yes, branch
@@ -37793,6 +37834,10 @@ plcid_FZBoss:		equ (ptr_PLC_FZBoss-ArtLoadCues)/2	; $1F
 
 		align	$200,$FF
 		dcb.b	$300,$FF
+
+; ---------------------------------------------------------------------------
+; Art and mappings - screens
+; ---------------------------------------------------------------------------
 Nem_SegaLogo:	incbin	"artnem\Sega Logo.bin" ; large Sega logo
 		even
 Eni_SegaLogo:	incbin	"misc\Sega Logo Maps (Enigma).bin" ; large Sega logo (mappings)
@@ -37809,13 +37854,11 @@ Eni_JapNames:	incbin	"misc\Hidden Japanese Credits Maps (Enigma).bin" ; Japanese
 		even
 Nem_JapNames:	incbin	"artnem\Hidden Japanese Credits.bin"
 		even
-
-Map_Sonic:	include	"_maps\Sonic.asm"
-SonicDynPLC:	include	"_maps\Sonic - Dynamic Gfx Script.asm"
-
 ; ---------------------------------------------------------------------------
 ; Uncompressed graphics - Sonic
 ; ---------------------------------------------------------------------------
+Map_Sonic:	include	"_maps\Sonic.asm"
+SonicDynPLC:	include	"_maps\Sonic - Dynamic Gfx Script.asm"
 Art_Sonic:	incbin	"artunc\Sonic.bin"	; Sonic
 		even
 ; ---------------------------------------------------------------------------
