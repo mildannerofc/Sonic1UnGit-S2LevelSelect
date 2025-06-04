@@ -4,6 +4,20 @@
 ;
 ; Disassembly created by Hivebrain
 ; thanks to drx, Stealth and Esrael L.G. Neto
+;
+; Further modified by Selbi with help from RobiWanKenobi
+
+; ===========================================================================
+
+; vladikcomper's debugger
+;   Omitting this line will save on some space and is recommended for releases.
+;   But if you start using some of the advanced debugger features, like assertions and KDebug interface,
+;   these features will be compiled and enabled only in DEBUG builds to avoid performance penalties when not debugging.
+;__DEBUG__:	equ 1
+
+; Enable all cheats by default (for development convenience)
+;   Level Select, Debug Mode, SlowMo Cheat, Hidden Japanese Credits
+;CheatsDefault:	equ 1
 
 ; ===========================================================================
 
@@ -11,11 +25,6 @@
 	include	"_Variables.asm"
 	include	"_Macros.asm"
 	include	"_debug/_Debugger.asm"
-EnableSRAM:	equ 0	; change to 1 to enable SRAM
-BackupSRAM:	equ 1
-AddressSRAM:	equ 3	; 0 = odd+even; 2 = even only; 3 = odd only
-
-ZoneCount:	equ 6	; discrete zones are: GHZ, MZ, SYZ, LZ, SLZ, and SBZ
 
 ; ===========================================================================
 
@@ -98,11 +107,7 @@ Checksum:	dc.w 0			; Selbi: redudant as the checksum check has been removed
 RomEndLoc:	dc.l EndOfRom-1		; End address of ROM
 		dc.l $FF0000		; Start address of RAM
 		dc.l $FFFFFF		; End address of RAM
-		if EnableSRAM=1
-		dc.b $52, $41, $A0+(BackupSRAM<<6)+(AddressSRAM<<3), $20 ; SRAM support
-		else
-		dc.l $20202020
-		endc
+SRAMSupport:	dc.l $20202020		; change to $5241F820 to create	SRAM
 		dc.l $20202020		; SRAM start ($200001)
 		dc.l $20202020		; SRAM end ($20xxxx)
 		dc.b "                                                    " ; Notes (unused, anything can be put in this space, but it has to be 52 bytes.)
@@ -269,18 +274,7 @@ GameProgram:
 		beq.w	GameInit	; if yes, branch
 
 CheckSumCheck:
-; 	movea.l	#EndOfHeader,a0	; start checking bytes after the header	($200)
-; 	movea.l	#RomEndLoc,a1	; stop at end of ROM
-; 	move.l	(a1),d0
-; 	moveq	#0,d1
-;
-; @loop:
-; 	add.w	(a0)+,d1
-; 	cmp.l	a0,d0
-; 	bhs.s	@loop
-; 	movea.l	#Checksum,a1	; read the checksum
-; 	cmp.w	(a1),d1		; compare checksum in header to ROM
-; 	bne.w	CheckSumError	; if they don't match, branch
+; Selbi: checksum check removed
 
 	CheckSumOk:
 		lea	(v_systemstack).w,a6
@@ -303,21 +297,27 @@ GameInit:
 		move.l	d7,(a6)+
 		dbf	d6,@clearRAM ; clear RAM ($0000-$FDFF)
 
+	if def(CheatsDefault)
+		move.b	#1,(f_debugmode).w
+		move.b	#1,(f_levselcheat).w
+		move.b	#1,(f_slomocheat).w
+		move.b	#1,(f_creditscheat).w
+	endif
+
 		bsr.w	VDPSetupGame
 		bsr.w	JoypadInit
 		move.b	#id_Sega,(v_gamemode).w ; set Game Mode to Sega Screen
 		jsr     MegaPCM_LoadDriver
-        lea     SampleTable, a0
-        jsr     MegaPCM_LoadSampleTable
-		tst.w   d0 ; was sample table loaded successfully?
-		beq.s   @SampleTableOk ; if yes, branch
-		;ifdef __DEBUG__
-		; for MD Debugger v.2.5 or above
-		;	RaiseError "MegaPCM_LoadSampleTable returned %<.b d0>", MPCM_Debugger_LoadSampleTableException
-		;else
+	        lea     SampleTable, a0
+	        jsr     MegaPCM_LoadSampleTable
+		tst.w   d0		; was sample table loaded successfully?
+		beq.s   MainGameLoop	; if yes, sample table is okay, branch
+	if def(__DEBUG__)
+		RaiseError "MegaPCM_LoadSampleTable returned %<.b d0>", MPCM_Debugger_LoadSampleTableException
+	else
 		illegal
-
-@SampleTableOk:
+	endif
+; ---------------------------------------------------------------------------
 
 MainGameLoop:
 		move.b	(v_gamemode).w,d0 ; load Game Mode
@@ -1743,7 +1743,6 @@ PCycle_Index:	dc.w PCycle_GHZ-PCycle_Index
 		dc.w PalCycle_SLZ-PCycle_Index
 		dc.w PalCycle_SYZ-PCycle_Index
 		dc.w PalCycle_SBZ-PCycle_Index
-		zonewarning PCycle_Index,2
 		dc.w PCycle_GHZ-PCycle_Index	; Ending
 
 PCycle_Title:
@@ -2554,7 +2553,6 @@ ptr_Pal_MZ:		palp	Pal_MZ,v_pal_dry+$20,$30		; 6 - MZ
 ptr_Pal_SLZ:		palp	Pal_SLZ,v_pal_dry+$20,$30		; 7 - SLZ
 ptr_Pal_SYZ:		palp	Pal_SYZ,v_pal_dry+$20,$30		; 8 - SYZ
 ptr_Pal_SBZ1:		palp	Pal_SBZ1,v_pal_dry+$20,$30		; 9 - SBZ1
-			zonewarning Pal_Levels,8
 ptr_Pal_Special:	palp	Pal_Special,v_pal_dry,$40		; $A (10) - special stage
 ptr_Pal_LZWater:	palp	Pal_LZWater,v_pal_dry,$40		; $B (11) - LZ underwater
 ptr_Pal_SBZ3:		palp	Pal_SBZ3,v_pal_dry+$20,$30		; $C (12) - SBZ3
@@ -2936,7 +2934,9 @@ GM_Title:
 		bsr.w	PalLoad1
 		move.b	#bgm_Title,d0
 		bsr.w	PlaySound_Special	; play title screen music
+	if def(CheatsDefault)=0
 		move.b	#0,(f_debugmode).w ; disable debug mode
+	endif
 		move.w	#$178,(v_demolength).w ; run title screen for $178 frames
 
 		lea	(v_sonicteam).w,a1
@@ -3426,7 +3426,6 @@ MusicList:
 		dc.b bgm_SLZ	; SLZ
 		dc.b bgm_SYZ	; SYZ
 		dc.b bgm_SBZ	; SBZ
-		zonewarning MusicList,1
 		dc.b bgm_FZ	; Ending
 		even
 ; ===========================================================================
@@ -4323,7 +4322,6 @@ ColPointers:	dc.l Col_GHZ
 		dc.l Col_SLZ
 		dc.l Col_SYZ
 		dc.l Col_SBZ
-		zonewarning ColPointers,4
 ; 	dc.l Col_GHZ ; Pointer for Ending is missing by default.
 
 ; ---------------------------------------------------------------------------
@@ -6213,7 +6211,6 @@ LevelSizeArray:
 		dc.w $0004, $0000, $1E40, $FF00, $0800, $0060
 		dc.w $0004, $2080, $2460, $0510, $0510, $0060
 		dc.w $0004, $0000, $3EC0, $0000, $0720, $0060
-		zonewarning LevelSizeArray,$30
 		; Ending
 		dc.w $0004, $0000, $0500, $0110, $0110, $0060
 		dc.w $0004, $0000, $0DC0, $0110, $0110, $0060
@@ -6334,8 +6331,6 @@ StartLocArray:
 		incbin	"startpos\fz.bin"
 		dc.w	$80,$A8
 
-		zonewarning StartLocArray,$10
-
 		incbin	"startpos\end1.bin"
 		incbin	"startpos\end2.bin"
 		dc.w	$80,$A8
@@ -6349,16 +6344,15 @@ StartLocArray:
 
 LoopTileNums:
 
-;  	loop	loop	tunnel	tunnel
+;	  	loop	loop	tunnel	tunnel
 
-	dc.b	$B5,	$7F,	$1F,	$20	; Green Hill
-	dc.b	$7F,	$7F,	$7F,	$7F	; Labyrinth
-	dc.b	$7F,	$7F,	$7F,	$7F	; Marble
-	dc.b	$AA,	$B4,	$7F,	$7F	; Star Light
-	dc.b	$7F,	$7F,	$7F,	$7F	; Spring Yard
-	dc.b	$7F,	$7F,	$7F,	$7F	; Scrap Brain
-	zonewarning LoopTileNums,4
-	dc.b	$7F,	$7F,	$7F,	$7F	; Ending (Green Hill)
+		dc.b	$B5,	$7F,	$1F,	$20	; Green Hill
+		dc.b	$7F,	$7F,	$7F,	$7F	; Labyrinth
+		dc.b	$7F,	$7F,	$7F,	$7F	; Marble
+		dc.b	$AA,	$B4,	$7F,	$7F	; Star Light
+		dc.b	$7F,	$7F,	$7F,	$7F	; Spring Yard
+		dc.b	$7F,	$7F,	$7F,	$7F	; Scrap Brain
+		dc.b	$7F,	$7F,	$7F,	$7F	; Ending (Green Hill)
 
 		even
 
@@ -6387,7 +6381,6 @@ loc_6206:
 BgScroll_Index:	dc.w BgScroll_GHZ-BgScroll_Index, BgScroll_LZ-BgScroll_Index
 		dc.w BgScroll_MZ-BgScroll_Index, BgScroll_SLZ-BgScroll_Index
 		dc.w BgScroll_SYZ-BgScroll_Index, BgScroll_SBZ-BgScroll_Index
-		zonewarning BgScroll_Index,2
 		dc.w BgScroll_End-BgScroll_Index
 ; ===========================================================================
 
@@ -6494,7 +6487,6 @@ DeformLayers:
 Deform_Index:	dc.w Deform_GHZ-Deform_Index, Deform_LZ-Deform_Index
 		dc.w Deform_MZ-Deform_Index, Deform_SLZ-Deform_Index
 		dc.w Deform_SYZ-Deform_Index, Deform_SBZ-Deform_Index
-		zonewarning Deform_Index,2
 		dc.w Deform_GHZ-Deform_Index
 ; ---------------------------------------------------------------------------
 ; Green Hill Zone background layer deformation code
@@ -8348,7 +8340,6 @@ loc_6DC4:
 DLE_Index:	dc.w DLE_GHZ-DLE_Index, DLE_LZ-DLE_Index
 		dc.w DLE_MZ-DLE_Index, DLE_SLZ-DLE_Index
 		dc.w DLE_SYZ-DLE_Index, DLE_SBZ-DLE_Index
-		zonewarning DLE_Index,2
 		dc.w DLE_Ending-DLE_Index
 ; ===========================================================================
 ; ---------------------------------------------------------------------------
@@ -15317,7 +15308,6 @@ LevelOrder:
 		dc.b 0, 0	; Final Zone
 		dc.b 0, 0
 		even
-		zonewarning LevelOrder,8
 ; ===========================================================================
 
 Got_Move2:	; Routine $E
@@ -23371,7 +23361,6 @@ MusicList2:
 		dc.b bgm_SLZ
 		dc.b bgm_SYZ
 		dc.b bgm_SBZ
-		zonewarning MusicList2,1
 		; The ending doesn't get an entry
 		even
 
@@ -35777,7 +35766,6 @@ AnimateLevelGfx:
 AniArt_Index:	dc.w AniArt_GHZ-AniArt_Index, AniArt_none-AniArt_Index
 		dc.w AniArt_MZ-AniArt_Index, AniArt_none-AniArt_Index
 		dc.w AniArt_none-AniArt_Index, AniArt_SBZ-AniArt_Index
-		zonewarning AniArt_Index,2
 		dc.w AniArt_Ending-AniArt_Index
 ; ===========================================================================
 ; ---------------------------------------------------------------------------
@@ -37188,7 +37176,6 @@ DebugList:
 		dc.w @SLZ-DebugList
 		dc.w @SYZ-DebugList
 		dc.w @SBZ-DebugList
-		zonewarning DebugList,2
 		dc.w @Ending-DebugList
 
 dbug:	macro map,object,subtype,frame,vram
@@ -37386,7 +37373,6 @@ lhead:	macro plc1,lvlgfx,plc2,sixteen,twofivesix,music,pal
 		lhead	plcid_SLZ,	Nem_SLZ,	plcid_SLZ2,	Blk16_SLZ,	Blk256_SLZ,	bgm_SLZ,	palid_SLZ	; Star Light
 		lhead	plcid_SYZ,	Nem_SYZ,	plcid_SYZ2,	Blk16_SYZ,	Blk256_SYZ,	bgm_SYZ,	palid_SYZ	; Spring Yard
 		lhead	plcid_SBZ,	Nem_SBZ,	plcid_SBZ2,	Blk16_SBZ,	Blk256_SBZ,	bgm_SBZ,	palid_SBZ1	; Scrap Brain
-		zonewarning LevelHeaders,$10
 		lhead	0,		Nem_GHZ_2nd,	0,		Blk16_GHZ,	Blk256_GHZ,	bgm_SBZ,	palid_Ending	; Ending
 		even
 
@@ -37414,7 +37400,6 @@ ptr_PLC_SYZ:		dc.w PLC_SYZ-ArtLoadCues
 ptr_PLC_SYZ2:		dc.w PLC_SYZ2-ArtLoadCues
 ptr_PLC_SBZ:		dc.w PLC_SBZ-ArtLoadCues
 ptr_PLC_SBZ2:		dc.w PLC_SBZ2-ArtLoadCues
-			zonewarning PLC_Levels,4
 ptr_PLC_TitleCard:	dc.w PLC_TitleCard-ArtLoadCues
 ptr_PLC_Boss:		dc.w PLC_Boss-ArtLoadCues
 ptr_PLC_Signpost:	dc.w PLC_Signpost-ArtLoadCues
@@ -37427,7 +37412,6 @@ ptr_PLC_MZAnimals:	dc.w PLC_MZAnimals-ArtLoadCues
 ptr_PLC_SLZAnimals:	dc.w PLC_SLZAnimals-ArtLoadCues
 ptr_PLC_SYZAnimals:	dc.w PLC_SYZAnimals-ArtLoadCues
 ptr_PLC_SBZAnimals:	dc.w PLC_SBZAnimals-ArtLoadCues
-			zonewarning PLC_Animals,2
 ptr_PLC_SSResult:	dc.w PLC_SSResult-ArtLoadCues
 ptr_PLC_Ending:		dc.w PLC_Ending-ArtLoadCues
 ptr_PLC_TryAgain:	dc.w PLC_TryAgain-ArtLoadCues
@@ -38271,7 +38255,6 @@ Level_Index:
 		dc.w Level_SBZ2-Level_Index, Level_SBZ2bg-Level_Index, Level_SBZ2bg-Level_Index
 		dc.w Level_SBZ2-Level_Index, Level_SBZ2bg-Level_Index, byte_6A2F8-Level_Index
 		dc.w byte_6A2FC-Level_Index, byte_6A2FC-Level_Index, byte_6A2FC-Level_Index
-		zonewarning Level_Index,24
 		; Ending
 		dc.w Level_End-Level_Index, Level_GHZbg-Level_Index, byte_6A320-Level_Index
 		dc.w Level_End-Level_Index, Level_GHZbg-Level_Index, byte_6A320-Level_Index
@@ -38398,7 +38381,6 @@ ObjPos_Index:
 		dc.w ObjPos_SBZ2-ObjPos_Index, ObjPos_Null-ObjPos_Index
 		dc.w ObjPos_FZ-ObjPos_Index, ObjPos_Null-ObjPos_Index
 		dc.w ObjPos_SBZ1-ObjPos_Index, ObjPos_Null-ObjPos_Index
-		zonewarning ObjPos_Index,$10
 		; Ending
 		dc.w ObjPos_End-ObjPos_Index, ObjPos_Null-ObjPos_Index
 		dc.w ObjPos_End-ObjPos_Index, ObjPos_Null-ObjPos_Index
@@ -38490,7 +38472,12 @@ ObjPos_Null:	dc.b $FF, $FF, 0, 0, 0,	0
 
 SoundDriver:	include "sound\s1.sounddriver.asm"
 		even
-	include	"_debug/_ErrorHandler.asm"
+
+; ==============================================================
+; --------------------------------------------------------------
+; Debugging modules
+; --------------------------------------------------------------
+		include	"_debug/_ErrorHandler.asm"
 ; --------------------------------------------------------------
 ; WARNING!
 ;	DO NOT put any data from now on! DO NOT use ROM padding!

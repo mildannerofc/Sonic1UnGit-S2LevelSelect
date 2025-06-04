@@ -212,16 +212,3 @@ gotoSRAM:	macro
 gotoROM:	macro
 		move.b	#0,($A130F1).l
 		endm
-
-; ---------------------------------------------------------------------------
-; compare the size of an index with ZoneCount constant
-; (should be used immediately after the index)
-; input: index address, element size
-; ---------------------------------------------------------------------------
-
-zonewarning:	macro loc,elementsize
-	@end:
-		if (@end-loc)-(ZoneCount*elementsize)<>0
-		inform 1,"Size of \loc ($%h) does not match ZoneCount ($\#ZoneCount).",(@end-loc)/elementsize
-		endc
-		endm
