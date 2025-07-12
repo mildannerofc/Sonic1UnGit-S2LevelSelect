@@ -12,3 +12,5 @@ sound/sfx/cmp/*.bin
 s1built.debug.bin
 *.sym
 *.lst
+/SonLVL INI Files/dllcache
+/SonLVL

@@ -820,7 +820,7 @@ ClearScreen:
 
 		lea	(v_spritetablebuffer).w,a1
 		moveq	#0,d0
-		move.w	#($280/4),d1	; This should be ($280/4)-1, leading to a slight bug (first bit of v_pal_water is cleared)
+		move.w	#($280/4)-1,d1
 
 	@clearsprites:
 		move.l	d0,(a1)+
@@ -828,7 +828,7 @@ ClearScreen:
 
 		lea	(v_hscrolltablebuffer).w,a1
 		moveq	#0,d0
-		move.w	#($400/4),d1	; This should be ($400/4)-1, leading to a slight bug (first bit of the Sonic object's RAM is cleared)
+		move.w	#($400/4)-1,d1
 
 	@clearhscroll:
 		move.l	d0,(a1)+
@@ -1333,6 +1333,10 @@ loc_16DC:
 loc_16E2:
 		move.l	6(a0),(a0)+
 		dbf	d0,loc_16E2
+		
+		; FixBugs: correctly pop the 16th PLC entry
+		move.w	6(a0),(a0)
+		clr.l	(v_plc_buffer+(6*16)-6).w
 		rts
 ; End of function ProcessDPLC2
 
@@ -37159,6 +37163,7 @@ Debug_ChgItem:
 		bne.s	@backtonormal
 		move.w	obX(a0),obX(a1)
 		move.w	obY(a0),obY(a1)
+		clr.b	(v_objstate+2).w	; Fix: allows for more than one collectible to be placed
 		move.b	4(a0),0(a1)	; create object
 		move.b	obRender(a0),obRender(a1)
 		move.b	obRender(a0),obStatus(a1)
