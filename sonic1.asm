@@ -2565,6 +2565,7 @@ ptr_Pal_SBZ3SonWat:	palp	Pal_SBZ3SonWat,v_pal_dry,$10	; $10 (16) - SBZ3 Sonic un
 ptr_Pal_SSResult:	palp	Pal_SSResult,v_pal_dry,$40		; $11 (17) - special stage results
 ptr_Pal_Continue:	palp	Pal_Continue,v_pal_dry,$20		; $12 (18) - special stage results continue
 ptr_Pal_Ending:		palp	Pal_Ending,v_pal_dry,$40		; $13 (19) - ending sequence
+ptr_Pal_Menu:		palp	Pal_Menu,v_pal_dry,$40		; 2 - level select
 			even
 
 palid_SegaBG:		equ (ptr_Pal_SegaBG-PalPointers)/8
@@ -3053,7 +3054,7 @@ Tit_ChkLevSel:
 		beq.w	PlayLevel	; if not, play level
 		btst	#bitA,(v_jpadhold1).w ; check if A is pressed
 		beq.w	PlayLevel	; if not, play level
-
+		jmp	Level_Select_Menu	; Go to Sonic 2 Level Select
 		moveq	#palid_LevelSel,d0
 		bsr.w	PalLoad2	; load level select palette
 		lea	(v_hscrolltablebuffer).w,a1
@@ -38533,4 +38534,7 @@ SoundDriver:	include "sound\s1.sounddriver.asm"
 ;	by ConvSym utility, otherwise debugger modules won't be able
 ;	to resolve symbol names.
 ; --------------------------------------------------------------
+
+		include	"s2_menu.asm"	; Sonic 2 level select
+
 EndOfRom:	END
