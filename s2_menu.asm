@@ -1,17 +1,17 @@
 ;===============================================================================
 ; Menu do Sonic 2 No Sonic 1 reprogramado por Esrael L. G. Neto
-; [ InÌcio ]
+; [ In√≠cio ]
 ;
-; O cÛdigo deste menu foi desenvolvido para funcionar com
+; O c√≥digo deste menu foi desenvolvido para funcionar com
 ; o disassembly do Sonic 1 feito por -> drx (www.hacking-cult.org)
 ; 
 ; Se estiver usando um disassembly diferente modifique os jumps no final do 
-; cÛdigo para que aponte para as rotinas equivalentes.
+; c√≥digo para que aponte para as rotinas equivalentes.
 ; 
-; Para pode utilizar este menu basta fazer a seguinte modificaÁ„o no cÛdigo 
+; Para pode utilizar este menu basta fazer a seguinte modifica√ß√£o no c√≥digo 
 ; original:
 ; Localize o label  -> loc_3242 adicione -> jmp     Level_Select_Menu
-; O cÛdigo deve ficar como abaixo
+; O c√≥digo deve ficar como abaixo
 ;               ......................
 ; loc_3242:
 ;		tst.b	($FFFFFFE0).w
@@ -23,7 +23,7 @@
 ;		bsr.w	PalLoad		 
 ;               ...............
 ;
-; N„o esqueÁa de incluir este asm em seu cÛdigo com a diretiva include:
+; N√£o esque√ßa de incluir este asm em seu c√≥digo com a diretiva include:
 ;               include 's2_menu.asm'
 ;===============================================================================  
 Slow_Motion_Flag      equ $FFFFFFE1
@@ -85,7 +85,7 @@ Offset_0x026ADA:
                 moveq   #$1B, D2
                 bsr     Menu_ShowVDPGraphics
 ;-------------------------------------------------------------------------------                
-; Carrega o Texto do Menu de SeleÁ„o de Fases               
+; Carrega o Texto do Menu de Sele√ß√£o de Fases               
 ;-------------------------------------------------------------------------------
                 lea     ($FFFF0000), A3
                 move.w  #$045F, D1
@@ -96,7 +96,7 @@ Offset_0x026B4E:
                 lea     (Menu_Level_Select_Text), A1
                 lea     (Menu_Text_Positions), A5
                 moveq   #$00, D0
-                move.w  #$0009, D1  ; Quantidade de textos a ser carregada e posiÁ„o do Sound Test
+                move.w  #$0009, D1  ; Quantidade de textos a ser carregada e posi√ß√£o do Sound Test
 Menu_Loop_Load_Text:
                 move.w  (A5)+, D3
                 lea     $00(A3, D3), A2
@@ -123,14 +123,14 @@ Offset_0x026B92:
 ;-------------------------------------------------------------------------------                
                 moveq   #$0E, D1
                 lea     $FFFFFFBA0(A2), A2
-Menu_Clear_Act_x:                                               ; Limpa os n˙meros dos acts n„o usados e carrega o "*" do Sound Test
+Menu_Clear_Act_x:                                               ; Limpa os n√∫meros dos acts n√£o usados e carrega o "*" do Sound Test
                 move.w  #$0000, (A2)                            ; Load " "
                 lea     $0050(A2), A2
                 dbra    D1, Menu_Clear_Act_x
-;                lea     $FF10(A2), A2
+                lea     $FFFFFF10(A2), A2
                 move.w  #$001A, (A2)          ; Load "*"
 ;-------------------------------------------------------------------------------
-; Carrega o Mapeamento das Asas onde s„o mostrados os Ìcones
+; Carrega o Mapeamento das Asas onde s√£o mostrados os √≠cones
 ;------------------------------------------------------------------------------- 
                 lea     (Wings_Mappings), A0
                 lea     ($FFFF0670), A1
@@ -143,7 +143,7 @@ Menu_Loop_Load_Wings:
                 add.w    #$3C, A1
                 dbra     D1, Menu_Loop_Next_Line
 ;-------------------------------------------------------------------------------                
-; Carrega o Mapeamento dos Ìcones               
+; Carrega o Mapeamento dos √≠cones               
 ;-------------------------------------------------------------------------------                                    
                 lea     ($FFFF08C0), A1
                 lea     (Icons_Mappings), A0
@@ -162,9 +162,9 @@ Menu_Loop_Load_Wings:
                 clr.b   ($FFFFF711).w
                 clr.w   ($FFFFF7F0).w
 ;------------------------------------------------------------------------------- 
-                move.w  #$0000, ($FFFFF7B8).w  ; Inicializa os quadros das animaÁıes do menu
-                move.w  #$0000, ($FFFFF7B9).w  ; Inicializa o contador das animaÁıes do menu 
-                jsr     Dynamic_Menu           ; Chama a rotina de animaÁ„o
+                move.w  #$0000, ($FFFFF7B8).w  ; Inicializa os quadros das anima√ß√µes do menu
+                move.w  #$0000, ($FFFFF7B9).w  ; Inicializa o contador das anima√ß√µes do menu 
+                jsr     Dynamic_Menu           ; Chama a rotina de anima√ß√£o
 ;-------------------------------------------------------------------------------
 
                 moveq   #$14, D0
@@ -294,19 +294,19 @@ Offset_0x026DFC:
                 beq.s   Offset_0x026E1C
                 subq.w  #$01, D0
                 bcc.s   Offset_0x026E1C
-                moveq   #$15, D0     ; ⁄ltimo item apÛs apertar para cima
+                moveq   #$15, D0     ; √öltimo item ap√≥s apertar para cima
 Offset_0x026E1C:
                 btst    #$01, D1
                 beq.s   Offset_0x026E2C
                 addq.w  #$01, D0
-                cmpi.w  #$0016, D0   ; Verifica qual o ˙ltimo item da lista
+                cmpi.w  #$0016, D0   ; Verifica qual o √∫ltimo item da lista
                 bcs.s   Offset_0x026E2C
                 moveq   #$00, D0
 Offset_0x026E2C:
                 move.w  D0, ($FFFFFF82).w
                 rts
 Offset_0x026E32:
-                cmpi.w  #$0015, ($FFFFFF82).w ; se o item for igual muda as funÁıes de esquerda e direita 
+                cmpi.w  #$0015, ($FFFFFF82).w ; se o item for igual muda as fun√ß√µes de esquerda e direita 
                 bne.s   Offset_0x026E9C
                 move.w  ($FFFFFF84).w, D0
                 move.b  ($FFFFF605).w, D1
@@ -407,13 +407,13 @@ Offset_0x026F28:
                 add.w   D3, D0
                 move.w  D0, (A6)
 Offset_0x026F6C:
-                cmpi.w  #$0015, ($FFFFFF82).w  ; Se for igual seleciona o n˙mero do Sound Test
+                cmpi.w  #$0015, ($FFFFFF82).w  ; Se for igual seleciona o n√∫mero do Sound Test
                 bne.s   Offset_0x026F78
                 bsr     Offset_0x026F7A
 Offset_0x026F78:
                 rts
 Offset_0x026F7A:
-                move.l  #$49C60003, ($00C00004) ; PosiÁ„o dos n˙meros do Sound Test
+                move.l  #$49C60003, ($00C00004) ; Posi√ß√£o dos n√∫meros do Sound Test
                 move.w  ($FFFFFF84).w, D0
                 move.b  D0, D2
                 lsr.b   #$04, D0
@@ -491,7 +491,7 @@ Offset_0x027050:
                 add.w   D0, D0
                 add.w   D1, D0
                 lea     $00(A1, D0), A1
-                move.l  #$4B360003, D0        ; PosiÁ„o Horizontal dos Õcones
+                move.l  #$4B360003, D0        ; Posi√ß√£o Horizontal dos √çcones
                 moveq   #$03, D1
                 moveq   #$02, D2
                 bsr     Menu_ShowVDPGraphics 
@@ -509,10 +509,10 @@ Offset_0x027098:
 ;-------------------------------------------------------------------------------                            
 Dynamic_Menu:                           
                 subq.b  #$01, ($FFFFF7B9).w          ; Decrementa em 1 o Tempo
-                bpl.s   Exit_Dinamic_Menu            ; Se for maior ou igual a 0 sai da funÁ„o
-                move.b  #$07, ($FFFFF7B9).w          ; Inicializa o tempo de duraÁ„o de cada frame
+                bpl.s   Exit_Dinamic_Menu            ; Se for maior ou igual a 0 sai da fun√ß√£o
+                move.b  #$07, ($FFFFF7B9).w          ; Inicializa o tempo de dura√ß√£o de cada frame
                 move.b  ($FFFFF7B8).w, D0            ; Carrega o Id do Frame Atual em D0
-                addq.b  #$01, ($FFFFF7B8).w          ; Carrega o prÛximo frame em $FFFFFFB8
+                addq.b  #$01, ($FFFFF7B8).w          ; Carrega o pr√≥ximo frame em $FFFFFFB8
                 andi.w  #$001F, D0
                 move.b  Sonic_Miles_Frame_Select(PC, D0), D0  ; Carrega o Id do frame em D0
               ; muls.w  #$0140, D0                   ; Multiplica o Id pelo tamanho em bytes de cada frame
