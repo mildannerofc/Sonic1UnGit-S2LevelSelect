@@ -77,6 +77,7 @@ ptr_mus90:	dc.l Music90
 ptr_mus91:	dc.l Music91
 ptr_mus92:	dc.l Music92
 ptr_mus93:	dc.l Music93
+ptr_mus94:	dc.l Music94
 ptr_musend
 ; ---------------------------------------------------------------------------
 ; Priority of sound. New music or SFX must have a priority higher than or equal
@@ -616,7 +617,7 @@ PlaySoundID:
 		; DANGER! Music ends at $93, yet this checks until $9F; attempting to
 		; play sounds $94-$9F will cause a crash! Remove the '+$C' to fix this.
 		; See LevSel_NoCheat for more.
-		cmpi.b	#bgm__Last+$C,d7	; Is this music ($81-$9F)?
+		cmpi.b	#bgm__Last,d7	; Is this music ($81-$9F)?
 		bls.w	Sound_PlayBGM		; Branch if yes
 		cmpi.b	#sfx__First,d7		; Is this after music but before sfx? (redundant check)
 		blo.w	@locret			; Return if yes
@@ -2482,6 +2483,8 @@ Music91:	include	"sound/music/Mus91 - Credits.asm"
 Music92:	include	"sound/music/Mus92 - Drowning.asm"
 		even
 Music93:	include	"sound/music/Mus93 - Get Emerald.asm"
+		even
+Music94:	include	"sound/music/options.asm"
 		even
 
 ; ---------------------------------------------------------------------------
