@@ -5,7 +5,8 @@
 ; Disassembly created by Hivebrain
 ; thanks to drx, Stealth and Esrael L.G. Neto
 ;
-; Further modified by Selbi with help from RobiWanKenobi
+; Sonic 2 Level Select for Sonic 1 by Esrael Neto and original disassembly
+; by Selbi with RobiWanKenobi help.
 
 ; ===========================================================================
 
