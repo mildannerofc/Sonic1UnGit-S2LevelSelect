@@ -1,5 +1,5 @@
 # Sonic 1 UnGit - Sonic 2 Level Select Extension
-Note: This is not intended to be submitted as a pull request. This is the same disassembly, demonstrating how Sonic 2 Level Select by Esrael has been added.
+Note: This is not intended to be submitted as a pull request. This is the same disassembly, demonstrating how Sonic 2 Level Select by Esrael has been added to Sonic 1 in this page [(Click on me)](https://info.sonicretro.org/SCHG_How-to:Port_Sonic_2_Level_Select_to_Sonic_1). 
 
 There is no need to create a tutorial about it, and I do NOT endorse this disassembly.
 
