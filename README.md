@@ -2,7 +2,7 @@ Note: This is not made to create pull request to be added, this is the same disa
 
 If you would like to use this in your project, remember to read the original description for more information about this disassembly.
 
-# Original description
+Original description
 ## Sonic 1 UnGit Disassembly
 This is a fork of the [Sonic 1 GitHub disassembly targeting _asm68k_](https://github.com/sonicretro/s1disasm/tree/asm68k) that aims to remove as much superfluous junk as possible. While the community disassembly is great for research purposes, it comes with a lot of stuff that makes the project folder unnecessarily bloated.
 
